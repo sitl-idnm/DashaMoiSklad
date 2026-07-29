@@ -1,67 +1,91 @@
 # DashaMoiSklad — Лист сборки из «Мой склад»
 
-Инструмент собирает **отгрузки за сутки (13:00–13:00)** из [«Мой склад»](https://dev.moysklad.ru/doc/api/remap/1.2/)
-в таблицу-лист сборки и выгружает её в **XLSX**. Есть два режима:
+Веб-панель, которая собирает **отгрузки за сутки (13:00–13:00)** из
+[«Мой склад»](https://dev.moysklad.ru/doc/api/remap/1.2/) в **лист сборки** и
+выгружает XLSX. Отчёт формируется **автоматически по расписанию** (Vercel Cron)
+и складывается в Supabase; на панели можно скачать готовые листы или собрать вручную.
 
-- **CLI** — `assembly_sheet_14.py` формирует и сохраняет файл на диск.
-- **Веб-панель** — `server.py` поднимает интерфейс с кнопкой «Сформировать» и скачиванием XLSX.
+- **Стек:** Next.js 14 (App Router) на Vercel, Supabase (Storage + таблица), exceljs.
+- **Панель:** дизайн-система KIM в винно-серой палитре.
+- **Python-версия** (в папке-репозитории, `*.py`) сохранена как локальный CLI-референс,
+  на Vercel не деплоится (см. `.vercelignore`).
 
 ## Что попадает в лист сборки
 
-| Колонка | Источник в «Мой склад» |
+| Колонка | Источник |
 |---|---|
 | Ячейка | `demand.positions.slot` → `«<зона> / <ячейка>»` |
-| Товар | `assortment.name` |
+| Товар / Артикул | `assortment.name` / `assortment.article` |
 | Фото | миниатюра товара (встраивается в XLSX) |
-| Артикул | `assortment.article` |
-| Штрихкод | штрихкоды товара (code128), **только начинающиеся на «4»**; если несколько — все |
+| Штрихкод | штрихкоды товара, **только начинающиеся на «4»**; если несколько — все |
 | Кол-во | `position.quantity` |
 | Клиент | `demand.organization` |
-| № заказа | `demand.name` (совпадает с номером заказа) |
-| Ссылка на этикетку | доп. поле заказа **«Этикетка MPsklad»** |
-| Дата заказа | `customerOrder.moment` |
+| № заказа | `demand.name` |
+| Ссылка на этикетку | доп. поле заказа «Этикетка MPsklad» |
 
-Отчёт строится **от отгрузок** — это даёт и ячейку (slot), и совпадение номера заказа с номером отгрузки.
+Отчёт строится **от отгрузок** — даёт ячейку (slot) и совпадение номера заказа с отгрузкой.
 
-## Окно выборки
+## Архитектура
 
-Сутки с границей в 13:00 (`WINDOW_HOUR`): верхняя граница — ближайшие **прошедшие** 13:00,
-нижняя — на сутки раньше. Пример: запуск 29-го в 21:00 → окно `[28 13:00 … 29 13:00)`.
-
-## Установка
-
-```bash
-pip install -r requirements.txt
-cp .env.example .env   # и заполнить MOYSKLAD_LOGIN / MOYSKLAD_PASSWORD
+```
+Vercel Cron (13:05 МСК = 10:05 UTC) ──► GET /api/generate
+                                           │  buildReport (МойСклад) → XLSX (exceljs)
+                                           ▼
+                              Supabase: Storage (bucket assembly-sheets)
+                                        + таблица assembly_sheets
+                                           ▲
+Панель  ──► GET /api/sheets ───────────────┘  (список + подписанные ссылки)
+        └─► POST /api/generate  (кнопка «Сформировать сейчас»)
 ```
 
-Учётные данные читаются **только из окружения** (`.env` в `.gitignore`, в репозиторий не попадает).
+## Развёртывание
 
-## Запуск
+### 1. Supabase
+1. Создать проект (или использовать существующий).
+2. **SQL Editor** → выполнить `supabase/schema.sql` (таблица + приватный бакет + RLS).
+3. **Settings → API** → скопировать `Project URL`, `anon` и `service_role` ключи.
 
-**CLI** (сохраняет XLSX в `OUTPUT_FOLDER`, по умолчанию `./output`):
-
+### 2. Локально
 ```bash
-python assembly_sheet_14.py
+npm install
+cp .env.example .env    # заполнить MOYSKLAD_* и SUPABASE_*
+npm run dev             # http://localhost:3000
 ```
 
-**Веб-панель** (по умолчанию http://127.0.0.1:8000):
+### 3. Vercel
+1. Импортировать репозиторий в Vercel (Framework preset: **Next.js**).
+2. **Settings → Environment Variables** — добавить:
+   `MOYSKLAD_LOGIN`, `MOYSKLAD_PASSWORD`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+   `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`.
+3. Deploy. Крон из `vercel.json` подхватится автоматически (`5 10 * * *` = 13:05 МСК).
 
-```bash
-python server.py
-```
+## Переменные окружения
 
-Открыть в браузере → «Мой склад» → **Лист сборки** → «Сформировать» → «Скачать XLSX».
+| Переменная | Зачем |
+|---|---|
+| `MOYSKLAD_LOGIN`, `MOYSKLAD_PASSWORD` | доступ к API «Мой склад» |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | чтение списка листов (панель) |
+| `SUPABASE_SERVICE_ROLE_KEY` | запись XLSX/строк (генерация) |
+| `CRON_SECRET` | защита `/api/generate` от посторонних вызовов |
 
 ## Структура
 
 ```
-moysklad_report.py   — ядро: запросы к API, сборка строк, генерация XLSX (без зависимостей от UI)
-assembly_sheet_14.py — CLI-обёртка над ядром
-server.py            — веб-сервер панели (стандартная библиотека, без фреймворков)
-web/index.html       — интерфейс панели (дизайн-система, винно-серая палитра)
+src/app/page.tsx            — панель (дашборд + инструмент)
+src/app/api/generate/route  — генерация (GET=cron, POST=вручную)
+src/app/api/sheets/route    — список готовых листов + подписанные ссылки
+src/lib/moysklad.ts         — окно, запросы к API, сборка записей
+src/lib/xlsx.ts             — сборка XLSX (exceljs, встраивание фото)
+src/lib/supabase.ts         — Storage/таблица через REST (без SDK)
+src/lib/generate.ts         — оркестрация: собрать → залить в Supabase
+supabase/schema.sql         — таблица assembly_sheets + бакет
+vercel.json                 — расписание крона
 ```
 
-## Зависимости
+## CLI-референс (Python)
 
-`requests`, `openpyxl`, `Pillow`. Веб-сервер — на стандартной библиотеке Python, без Flask/Django.
+Локальный запуск без веба сохраняет XLSX на диск:
+```bash
+pip install -r requirements.txt   # requests, openpyxl, Pillow
+python assembly_sheet_14.py       # окно берётся автоматически
+```

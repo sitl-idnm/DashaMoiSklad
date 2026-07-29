@@ -1,16 +1,23 @@
 # Секреты
 .env
+.env*.local
+
+# Node / Next
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# Python-референс
+__pycache__/
+*.py[cod]
+.venv/
+venv/
 
 # Артефакты
 output/
 _img_cache/
 *.xlsx
-
-# Python
-__pycache__/
-*.py[cod]
-.venv/
-venv/
 
 # ОС / редакторы
 .DS_Store

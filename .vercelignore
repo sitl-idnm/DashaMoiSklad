@@ -1,0 +1,6 @@
+# Python-референс (CLI) — не деплоится на Vercel
+*.py
+requirements.txt
+web/
+output/
+_img_cache/
