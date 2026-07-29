@@ -13,8 +13,12 @@ export async function GET() {
   }
   try {
     const sheets = await listSheets(60)
-    const since = Date.now() - 31 * 24 * 3600 * 1000
-    const rows = sheets.filter((s) => new Date(s.window_end).getTime() >= since)
+    // Сводку считаем начиная с этой даты (МСК) и только по ежедневным (auto)
+    // листам — ручные ad-hoc отчёты пересекаются с сутками и задваивали бы цифры.
+    const SINCE = new Date('2026-07-29T00:00:00+03:00').getTime()
+    const rows = sheets.filter(
+      (s) => s.source === 'auto' && new Date(s.window_end).getTime() >= SINCE
+    )
 
     let orders = 0
     let positions = 0
