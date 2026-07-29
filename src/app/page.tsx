@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 
 type DataRow = { [column: string]: string | number }
 interface Sheet {
@@ -20,11 +20,20 @@ interface Win {
   startStr: string
   endStr: string
 }
+type SumBar = { label: string; orders: number; units: number }
+interface Summary {
+  configured: boolean
+  error?: string
+  totals?: { orders: number; positions: number; units: number; revenue: number; clients: number; activeDays: number }
+  series?: { date: string; orders: number; units: number; revenue: number }[]
+  topClients?: SumBar[]
+  topProducts?: SumBar[]
+}
 
 // Колонки внутренней (раскрывающейся) таблицы — порядок как в XLSX, без фото.
 const DATA_COLS = [
   'Ячейка', 'Товар', 'Артикул', 'Штрихкод', 'Кол-во',
-  'Клиент', '№ заказа', 'Ссылка на этикетку', 'Дата заказа'
+  'Клиент', '№ заказа', 'Стикер', 'Ссылка на этикетку', 'Дата заказа'
 ] as const
 
 const CATS = { all: 'Все инструменты', sklad: 'Мой склад', reports: 'Отчёты' } as const
@@ -32,7 +41,9 @@ type Cat = keyof typeof CATS
 
 export default function Panel() {
   const [cat, setCat] = useState<Cat>('all')
-  const [view, setView] = useState<'dashboard' | 'tool'>('dashboard')
+  const [view, setView] = useState<'dashboard' | 'tool' | 'summary'>('dashboard')
+  const [summary, setSummary] = useState<Summary | null>(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
   const [win, setWin] = useState<Win | null>(null)
   const [sheets, setSheets] = useState<Sheet[]>([])
   const [configured, setConfigured] = useState(true)
@@ -124,7 +135,38 @@ export default function Panel() {
     window.location.href = '/login'
   }
 
+  async function loadSummary() {
+    setSummaryLoading(true)
+    try {
+      const r = await fetch('/api/summary', { cache: 'no-store' })
+      setSummary(await r.json())
+    } catch (e: any) {
+      setSummary({ configured: true, error: String(e?.message || e) })
+    } finally {
+      setSummaryLoading(false)
+    }
+  }
+
+  // Анимации появления — привязаны к вьюпорту (IntersectionObserver), а не к монтированию.
+  useEffect(() => {
+    const sel = '.stat,.range-card,.list-bar,.sheet-card,.sections .card,.kpi,.chart-card'
+    const els = Array.from(document.querySelectorAll<HTMLElement>(sel)).filter((e) => !e.classList.contains('in'))
+    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      els.forEach((e) => e.classList.add('in'))
+      return
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const en of entries) if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target) }
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -40px 0px' }
+    )
+    els.forEach((e) => io.observe(e))
+    return () => io.disconnect()
+  }, [view, tab, showEmpty, sheets, summary, loading, summaryLoading, expanded])
+
   const openTool = () => setView('tool')
+  const openSummary = () => { setView('summary'); if (!summary) loadSummary() }
   const back = () => setView('dashboard')
 
   // Листы текущей вкладки; пустые дни прячем, пока не включён toggle.
@@ -195,6 +237,18 @@ export default function Panel() {
                     <h3>Остатки товаров</h3>
                     <p>Текущие остатки по складам и ячейкам с выгрузкой в таблицу.</p>
                     <div className="card-foot"><span className="chip soon">скоро</span></div>
+                  </div>
+                </div>
+              </section>
+            )}
+            {(cat === 'all' || cat === 'reports') && (
+              <section>
+                <div className="eyebrow"><span className="badge"><IconChart s={14} /></span><span className="label">аналитика</span></div>
+                <div className="grid">
+                  <div className="card clickable" onClick={openSummary}>
+                    <h3>Сводка за месяц</h3>
+                    <p>Заказы, клиенты, единицы и выручка за 30 дней. Активность по дням, самые активные клиенты и топ товаров — с графиками.</p>
+                    <div className="card-foot"><span className="chip ready">готово</span><span className="open-link">Открыть →</span></div>
                   </div>
                 </div>
               </section>
@@ -282,84 +336,127 @@ export default function Panel() {
               )}
             </div>
 
-            <div className="table-wrap">
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr><th></th><th>дата / окно суток</th><th>отгрузок</th><th>позиций</th><th>строк</th><th>создан</th><th>скачать</th></tr>
-                  </thead>
-                  <tbody>
-                    {loading && <tr><td colSpan={7} className="muted">Загрузка…</td></tr>}
-                    {!loading && visible.length === 0 && (
-                      <tr><td colSpan={7} className="muted">
-                        {tab === 'manual'
-                          ? 'Ручных отчётов пока нет. Соберите за период выше.'
-                          : inTab.length === 0
-                            ? 'Пока нет готовых листов. Нажмите «Сформировать сейчас» или дождитесь ежедневного запуска.'
-                            : 'За этот период дней с отгрузками нет. Включите «показывать пустые», чтобы увидеть все сутки.'}
-                      </td></tr>
+            <div className="sheet-list">
+              {loading && <div className="list-empty">Загрузка…</div>}
+              {!loading && visible.length === 0 && (
+                <div className="list-empty">
+                  {tab === 'manual'
+                    ? 'Ручных отчётов пока нет. Соберите за период выше.'
+                    : inTab.length === 0
+                      ? 'Пока нет готовых листов. Нажмите «Сформировать сейчас» или дождитесь ежедневного запуска.'
+                      : 'За этот период дней с отгрузками нет. Включите «показывать пустые», чтобы увидеть все сутки.'}
+                </div>
+              )}
+              {visible.map((s) => {
+                const open = expanded.has(s.id)
+                return (
+                  <div className={`sheet-card ${open ? 'open' : ''}`} key={s.id}>
+                    <div className="sheet-main" onClick={() => toggle(s.id)}>
+                      <DateBadge iso={s.window_end} />
+                      <div className="sheet-info">
+                        <span className="sheet-day">{fmtDay(s.window_end)}</span>
+                        <span className="sheet-win">{fmtWin(s.window_start)} → {fmtWin(s.window_end)}</span>
+                      </div>
+                      <div className="sheet-metrics">
+                        <span className="metric"><b>{s.demands}</b><span>отгрузок</span></span>
+                        <span className="metric"><b>{s.positions}</b><span>позиций</span></span>
+                        <span className="metric"><b>{s.rows}</b><span>строк</span></span>
+                      </div>
+                      <span className="sheet-created">{fmtDt(s.created_at)}</span>
+                      <div className="sheet-actions">
+                        {s.url && (
+                          <a className="btn-dl" href={s.url} onClick={(e) => e.stopPropagation()}>Скачать</a>
+                        )}
+                        <button
+                          className={`chevron ${open ? 'up' : ''}`}
+                          onClick={(e) => { e.stopPropagation(); toggle(s.id) }}
+                          aria-label={open ? 'Свернуть' : 'Развернуть'}
+                          title={open ? 'Свернуть' : 'Показать таблицу'}
+                        >
+                          <IconChevron />
+                        </button>
+                      </div>
+                    </div>
+                    {open && (
+                      <div className="sheet-detail">
+                        {s.data && s.data.length > 0 ? (
+                          <div className="detail-scroll">
+                            <table className="detail-table">
+                              <thead>
+                                <tr>
+                                  <th className="th-img">фото</th>
+                                  {DATA_COLS.map((c) => <th key={c}>{c}</th>)}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {s.data.map((row, i) => (
+                                  <tr key={i}>
+                                    <td className="img-cell">
+                                      {row._img
+                                        ? <img src={String(row._img)} alt="" loading="lazy" />
+                                        : <span className="muted">—</span>}
+                                    </td>
+                                    {DATA_COLS.map((c) => (
+                                      <td key={c} className={c === 'Стикер' ? 'sticker-cell' : undefined}>
+                                        {c === 'Ссылка на этикетку' && row[c]
+                                          ? <a className="sticker-link" href={String(row[c])} target="_blank" rel="noreferrer">открыть ↗</a>
+                                          : formatCell(c, row[c])}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div className="muted" style={{ padding: '4px 2px' }}>Данных по строкам нет (пустое окно или лист собран без сохранения строк).</div>
+                        )}
+                      </div>
                     )}
-                    {visible.map((s) => {
-                      const open = expanded.has(s.id)
-                      return (
-                        <Fragment key={s.id}>
-                          <tr className={open ? 'row-open' : ''}>
-                            <td>
-                              <button
-                                className={`chevron ${open ? 'up' : ''}`}
-                                onClick={() => toggle(s.id)}
-                                aria-label={open ? 'Свернуть' : 'Развернуть'}
-                                title={open ? 'Свернуть' : 'Показать таблицу'}
-                              >
-                                <IconChevron />
-                              </button>
-                            </td>
-                            <td>
-                              <div className="row-date">
-                                <DateBadge iso={s.window_end} />
-                                <span className="win-range">
-                                  <span className="win-main">{fmtDay(s.window_end)}</span>
-                                  <span className="win-sub">{fmtWin(s.window_start)} → {fmtWin(s.window_end)}</span>
-                                </span>
-                              </div>
-                            </td>
-                            <td>{s.demands}</td>
-                            <td>{s.positions}</td>
-                            <td>{s.rows}</td>
-                            <td className="muted">{fmtDt(s.created_at)}</td>
-                            <td>{s.url ? <a className="dl" href={s.url}>скачать ↓</a> : <span className="muted">—</span>}</td>
-                          </tr>
-                          {open && (
-                            <tr className="detail-row">
-                              <td colSpan={7}>
-                                {s.data && s.data.length > 0 ? (
-                                  <div className="detail-scroll">
-                                    <table className="detail-table">
-                                      <thead>
-                                        <tr>{DATA_COLS.map((c) => <th key={c}>{c}</th>)}</tr>
-                                      </thead>
-                                      <tbody>
-                                        {s.data.map((row, i) => (
-                                          <tr key={i}>
-                                            {DATA_COLS.map((c) => <td key={c}>{formatCell(c, row[c])}</td>)}
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                ) : (
-                                  <div className="muted" style={{ padding: '4px 2px' }}>Данных по строкам нет (пустое окно или лист собран старой версией).</div>
-                                )}
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                  </div>
+                )
+              })}
             </div>
+          </div>
+        )}
+
+        {view === 'summary' && (
+          <div className="summary">
+            <div>
+              <h1>Сводка за месяц</h1>
+              <p className="sub">Данные за последние 30 дней по сохранённым листам сборки.</p>
+            </div>
+
+            {summaryLoading && <div className="list-empty">Считаю статистику…</div>}
+            {!summaryLoading && summary?.error && <div className="error">Не удалось получить сводку: {summary.error}</div>}
+
+            {!summaryLoading && summary?.totals && (
+              <>
+                <div className="summary-kpis">
+                  <div className="kpi"><div className="kpi-num"><CountUp value={summary.totals.orders} /></div><div className="kpi-cap">заказов</div></div>
+                  <div className="kpi"><div className="kpi-num"><CountUp value={summary.totals.clients} /></div><div className="kpi-cap">клиентов</div></div>
+                  <div className="kpi"><div className="kpi-num"><CountUp value={summary.totals.units} /></div><div className="kpi-cap">единиц отгружено</div></div>
+                  <div className="kpi accent"><div className="kpi-num">₽&nbsp;<CountUp value={summary.totals.revenue} /></div><div className="kpi-cap">выручка</div></div>
+                  <div className="kpi"><div className="kpi-num"><CountUp value={summary.totals.activeDays} /></div><div className="kpi-cap">активных дней</div></div>
+                </div>
+
+                <div className="chart-card">
+                  <div className="chart-head">Активность по дням — единиц отгружено</div>
+                  <AreaChart series={summary.series || []} />
+                </div>
+
+                <div className="chart-grid">
+                  <div className="chart-card">
+                    <div className="chart-head">Самые активные клиенты</div>
+                    <BarList items={summary.topClients || []} unit="ед." />
+                  </div>
+                  <div className="chart-card">
+                    <div className="chart-head">Топ товаров</div>
+                    <BarList items={summary.topProducts || []} unit="ед." />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
       </main>
@@ -393,6 +490,52 @@ function DateBadge({ iso }: { iso: string }) {
 function fmtDay(iso: string) {
   const d = new Date(iso)
   return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`
+}
+
+/** Area-график активности по дням. Линия «рисуется», заливка проявляется (по .in родителя). */
+function AreaChart({ series }: { series: { date: string; units: number }[] }) {
+  const W = 720, H = 210, P = 10
+  const data = series.length ? series : [{ date: '', units: 0 }]
+  const max = Math.max(1, ...data.map((d) => d.units))
+  const n = data.length
+  const x = (i: number) => (n <= 1 ? W / 2 : P + (i * (W - 2 * P)) / (n - 1))
+  const y = (v: number) => H - P - (v / max) * (H - 2 * P - 6)
+  const line = data.map((d, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(d.units).toFixed(1)}`).join(' ')
+  const area = `${line} L${x(n - 1).toFixed(1)},${H - P} L${x(0).toFixed(1)},${H - P} Z`
+  return (
+    <svg className="chart-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img">
+      <defs>
+        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--wine)" stopOpacity="0.26" />
+          <stop offset="100%" stopColor="var(--wine)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path className="chart-area" d={area} fill="url(#areaGrad)" />
+      <path className="chart-line" d={line} fill="none" stroke="var(--wine)" strokeWidth="2.5"
+        pathLength={1} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/** Горизонтальные бары; ширина растёт при попадании родителя в вьюпорт (.in). */
+function BarList({ items, unit }: { items: SumBar[]; unit?: string }) {
+  const max = Math.max(1, ...items.map((i) => i.units))
+  if (items.length === 0) return <div className="muted" style={{ fontSize: 13 }}>Нет данных за период.</div>
+  return (
+    <div className="bar-list">
+      {items.map((it, idx) => (
+        <div className="bar-row" key={it.label + idx}>
+          <div className="bar-top">
+            <span className="bar-label" title={it.label}>{it.label}</span>
+            <span className="bar-val">{it.units}{unit ? ` ${unit}` : ''}{it.orders ? ` · ${it.orders} зак.` : ''}</span>
+          </div>
+          <div className="bar-track">
+            <div className="bar-fill" style={{ ['--w']: `${Math.round((it.units / max) * 100)}%` } as CSSProperties} />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 /** Плавный счётчик числа (0 → value) с ease-out; уважает reduced-motion. */
 function CountUp({ value, duration = 800 }: { value: number; duration?: number }) {
@@ -432,6 +575,7 @@ function formatCell(col: string, value: string | number | undefined) {
 /* ---------- Иконки ---------- */
 function IconChevron() { return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polyline points="6,9 12,15 18,9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>) }
 function IconCalendar() { return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.6" /><line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" strokeWidth="1.6" /><line x1="8" y1="3" x2="8" y2="6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><line x1="16" y1="3" x2="16" y2="6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>) }
+function IconChart({ s = 18 }: { s?: number }) { return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M4 20V4M4 20h16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><rect x="7" y="12" width="3" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" /><rect x="12.5" y="8" width="3" height="9" rx="1" stroke="currentColor" strokeWidth="1.5" /><rect x="18" y="14" width="3" height="3" rx="1" stroke="currentColor" strokeWidth="1.5" /></svg>) }
 function IconGrid() { return (<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" /><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" /><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" /><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" /></svg>) }
 function IconWarehouse({ s = 18 }: { s?: number }) { return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M3 9l9-5 9 5v10a1 1 0 01-1 1H4a1 1 0 01-1-1z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /><path d="M8 20v-6h8v6" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>) }
 function IconDoc({ s = 18 }: { s?: number }) { return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v14H6z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /><line x1="9" y1="12" x2="16" y2="12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /><line x1="9" y1="16" x2="16" y2="16" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>) }

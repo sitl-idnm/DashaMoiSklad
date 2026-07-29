@@ -23,6 +23,7 @@ export interface Record {
   '№ заказа': string
   'Ссылка на этикетку': string
   'Дата заказа': string
+  'Стикер'?: string
   image: Buffer | null
 }
 
@@ -30,7 +31,7 @@ export interface ReportResult {
   startStr: string
   endStr: string
   records: Record[]
-  stats: { demands: number; positions: number; rows: number }
+  stats: { demands: number; positions: number; rows: number; revenue: number }
 }
 
 // ---------------- Авторизация ----------------
@@ -255,8 +256,10 @@ export async function buildReport(
   const imgCache = new Map<string, Buffer | null>()
   const records: Record[] = []
   let totalPositions = 0
+  let revenueKopecks = 0
 
   for (const demand of demands) {
+    revenueKopecks += Number(demand.sum) || 0
     const order = demand.customerOrder || {}
     const number = demand.name || ''
     const org = demand.organization?.name || ''
@@ -305,6 +308,11 @@ export async function buildReport(
     startStr,
     endStr,
     records,
-    stats: { demands: demands.length, positions: totalPositions, rows: records.length }
+    stats: {
+      demands: demands.length,
+      positions: totalPositions,
+      rows: records.length,
+      revenue: Math.round(revenueKopecks / 100)
+    }
   }
 }

@@ -17,6 +17,7 @@ export async function buildXlsx(records: Record[]): Promise<Buffer> {
     { header: 'Кол-во', width: 8 },
     { header: 'Клиент', width: 30 },
     { header: '№ заказа', width: 16 },
+    { header: 'Стикер', width: 16 },
     { header: 'Ссылка на этикетку', width: 55 },
     { header: 'Дата заказа', width: 20 }
   ]
@@ -33,7 +34,7 @@ export async function buildXlsx(records: Record[]): Promise<Buffer> {
     const rowNumber = i + 2 // 1 — шапка
     ws.addRow([
       rec['Ячейка'], rec['Товар'], '', rec['Артикул'], rec['Штрихкод'],
-      rec['Кол-во'], rec['Клиент'], rec['№ заказа'],
+      rec['Кол-во'], rec['Клиент'], rec['№ заказа'], rec['Стикер'] ?? '',
       rec['Ссылка на этикетку'], rec['Дата заказа']
     ])
     ws.getRow(rowNumber).alignment = { wrapText: true, vertical: 'middle' }

@@ -39,6 +39,7 @@ export interface SheetRow {
   demands: number
   positions: number
   rows: number
+  revenue: number
   data: SheetDataRow[]
   source: 'auto' | 'manual'
   created_at: string
