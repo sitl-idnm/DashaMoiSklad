@@ -40,6 +40,7 @@ export interface SheetRow {
   positions: number
   rows: number
   data: SheetDataRow[]
+  source: 'auto' | 'manual'
   created_at: string
 }
 
@@ -91,7 +92,7 @@ export async function insertSheet(row: Omit<SheetRow, 'id' | 'created_at'>): Pro
 export async function listSheets(limit = 60): Promise<SheetRow[]> {
   const key = anonKey()
   const res = await fetch(
-    `${base()}/rest/v1/${TABLE}?select=*&order=created_at.desc&limit=${limit}`,
+    `${base()}/rest/v1/${TABLE}?select=*&order=window_start.desc&limit=${limit}`,
     { headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: 'no-store' }
   )
   if (!res.ok) throw new Error(`List failed: ${res.status}`)

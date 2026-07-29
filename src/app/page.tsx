@@ -12,6 +12,7 @@ interface Sheet {
   positions: number
   rows: number
   data: DataRow[]
+  source: 'auto' | 'manual'
   created_at: string
   url: string | null
 }
@@ -43,6 +44,8 @@ export default function Panel() {
   const [rangeEnd, setRangeEnd] = useState('')
   const [rangeImages, setRangeImages] = useState(true)
   const [genR, setGenR] = useState(false)
+  const [tab, setTab] = useState<'auto' | 'manual'>('auto')
+  const [showEmpty, setShowEmpty] = useState(false)
 
   function toggle(id: number) {
     setExpanded((prev) => {
@@ -101,11 +104,13 @@ export default function Panel() {
         body: JSON.stringify({
           start: toBackendDate(rangeStart),
           end: toBackendDate(rangeEnd),
-          downloadImages: rangeImages
+          downloadImages: rangeImages,
+          manual: true
         })
       })
       const d = await r.json()
       if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`)
+      setTab('manual')
       await loadSheets()
     } catch (e: any) {
       setErr('Ошибка генерации за период: ' + String(e?.message || e))
@@ -121,7 +126,12 @@ export default function Panel() {
 
   const openTool = () => setView('tool')
   const back = () => setView('dashboard')
-  const total = sheets.reduce((a, s) => a + (s.rows || 0), 0)
+
+  // Листы текущей вкладки; пустые дни прячем, пока не включён toggle.
+  const inTab = sheets.filter((s) => (s.source ?? 'auto') === tab)
+  const visible = showEmpty ? inTab : inTab.filter((s) => s.rows > 0)
+  const emptyCount = inTab.length - inTab.filter((s) => s.rows > 0).length
+  const total = inTab.reduce((a, s) => a + (s.rows || 0), 0)
 
   return (
     <div className="app">
@@ -251,10 +261,25 @@ export default function Panel() {
             {err && <div className="error">{err}</div>}
 
             <div className="stats">
-              <div className="stat"><div className="num">{sheets.length}</div><div className="cap">готовых листов</div></div>
-              <div className="stat"><div className="num">{sheets[0]?.demands ?? 0}</div><div className="cap">отгрузок (последний)</div></div>
+              <div className="stat"><div className="num">{visible.length}</div><div className="cap">{tab === 'auto' ? 'дней с отгрузками' : 'ручных отчётов'}</div></div>
+              <div className="stat"><div className="num">{inTab[0]?.demands ?? 0}</div><div className="cap">отгрузок (последний)</div></div>
               <div className="stat"><div className="num">{total}</div><div className="cap">строк всего</div></div>
               <div className="stat dark"><div className="num">13:00</div><div className="cap">граница суток</div></div>
+            </div>
+
+            <div className="list-bar">
+              <div className="tabs">
+                <button className={`tab ${tab === 'auto' ? 'active' : ''}`} onClick={() => setTab('auto')}>Ежедневные</button>
+                <button className={`tab ${tab === 'manual' ? 'active' : ''}`} onClick={() => setTab('manual')}>Ручные</button>
+              </div>
+              {tab === 'auto' && (
+                <label className="switch-wrap">
+                  <span className="switch-label">показывать пустые{emptyCount > 0 ? ` (${emptyCount})` : ''}</span>
+                  <span className={`switch ${showEmpty ? 'on' : ''}`} onClick={() => setShowEmpty((v) => !v)} role="switch" aria-checked={showEmpty}>
+                    <span className="knob" />
+                  </span>
+                </label>
+              )}
             </div>
 
             <div className="table-wrap">
@@ -265,10 +290,16 @@ export default function Panel() {
                   </thead>
                   <tbody>
                     {loading && <tr><td colSpan={7} className="muted">Загрузка…</td></tr>}
-                    {!loading && sheets.length === 0 && (
-                      <tr><td colSpan={7} className="muted">Пока нет готовых листов. Нажмите «Сформировать сейчас» или дождитесь ежедневного запуска.</td></tr>
+                    {!loading && visible.length === 0 && (
+                      <tr><td colSpan={7} className="muted">
+                        {tab === 'manual'
+                          ? 'Ручных отчётов пока нет. Соберите за период выше.'
+                          : inTab.length === 0
+                            ? 'Пока нет готовых листов. Нажмите «Сформировать сейчас» или дождитесь ежедневного запуска.'
+                            : 'За этот период дней с отгрузками нет. Включите «показывать пустые», чтобы увидеть все сутки.'}
+                      </td></tr>
                     )}
-                    {sheets.map((s) => {
+                    {visible.map((s) => {
                       const open = expanded.has(s.id)
                       return (
                         <Fragment key={s.id}>
@@ -285,8 +316,11 @@ export default function Panel() {
                             </td>
                             <td>
                               <div className="row-date">
-                                <span className="date-badge">{dateBadge(s.window_end)}</span>
-                                <span className="win-range">{fmtWin(s.window_start)} → {fmtWin(s.window_end)}</span>
+                                <DateBadge iso={s.window_end} />
+                                <span className="win-range">
+                                  <span className="win-main">{fmtDay(s.window_end)}</span>
+                                  <span className="win-sub">{fmtWin(s.window_start)} → {fmtWin(s.window_end)}</span>
+                                </span>
                               </div>
                             </td>
                             <td>{s.demands}</td>
@@ -344,10 +378,21 @@ function fmtDt(iso: string) {
   return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
-/** Компактная дата для винного бейджа: день + короткий месяц (по дате конца окна). */
-function dateBadge(iso: string) {
+const WEEKDAYS = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб']
+/** Календарная плитка: день + месяц (по дате конца окна = «день листа»). */
+function DateBadge({ iso }: { iso: string }) {
   const d = new Date(iso)
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}`
+  return (
+    <span className="date-badge">
+      <span className="db-day">{d.getDate()}</span>
+      <span className="db-mon">{MONTHS[d.getMonth()]}</span>
+    </span>
+  )
+}
+/** «пн, 29 июля» — человекочитаемый заголовок дня по дате конца окна. */
+function fmtDay(iso: string) {
+  const d = new Date(iso)
+  return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`
 }
 /** datetime-local ("2026-07-01T13:00") -> формат бэкенда "2026-07-01 13:00:00". */
 function toBackendDate(v: string) {

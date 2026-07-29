@@ -22,7 +22,8 @@ export interface GenerateSummary {
 export async function generateAndStore(
   startStr?: string,
   endStr?: string,
-  downloadImages = true
+  downloadImages = true,
+  source: 'auto' | 'manual' = 'auto'
 ): Promise<GenerateSummary> {
   if (!startStr || !endStr) {
     const w = computeWindow()
@@ -48,7 +49,8 @@ export async function generateAndStore(
     demands: report.stats.demands,
     positions: report.stats.positions,
     rows: report.stats.rows,
-    data
+    data,
+    source
   })
 
   return {

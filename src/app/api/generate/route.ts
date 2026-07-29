@@ -42,7 +42,8 @@ export async function POST(req: Request) {
     const summary = await generateAndStore(
       body.start,
       body.end,
-      body.downloadImages !== false
+      body.downloadImages !== false,
+      body.manual ? 'manual' : 'auto'
     )
     return NextResponse.json({ ok: true, ...summary })
   } catch (e: any) {
