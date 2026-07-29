@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Панель инструментов · Мой склад</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16181B; --page:#FAFAFA; --tonal:#F5F5F6; --stroke:#E4E4E7; --row:#F0F0F2;
+    /* Винно-серая палитра (замена красной) */
+    --wine:#7C2438; --wine-2:#9A3A54;
+    --wine-grad:linear-gradient(256deg,#7C2438,#9A3A54);
+    --wine-soft:rgba(124,36,56,0.08);
+    --sidebar:#242329;                 /* тёмно-серый */
+    --ok:#0a7a45; --ok-soft:rgba(0,150,80,.08);
+    --font-display:'Inter Tight',-apple-system,Segoe UI,Roboto,sans-serif;
+    --font-body:'Manrope',-apple-system,Segoe UI,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font-body);color:var(--ink);background:var(--page)}
+  a{color:var(--wine)} a:hover{color:var(--wine-2)}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:var(--stroke);border-radius:8px}
+
+  .app{display:flex;min-height:100vh}
+
+  /* ---------- Сайдбар ---------- */
+  .sidebar{width:264px;flex-shrink:0;background:var(--sidebar);color:#fff;
+    display:flex;flex-direction:column;justify-content:space-between;padding:28px 20px}
+  .brand{display:flex;flex-direction:column;gap:2px;padding:0 8px;margin-bottom:36px}
+  .brand .title{font-family:var(--font-display);font-weight:600;font-size:16px;letter-spacing:.01em}
+  .brand .sub{font-size:12px;color:rgba(255,255,255,.4)}
+  nav{display:flex;flex-direction:column;gap:4px}
+  .nav-item{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:10px;
+    cursor:pointer;color:rgba(255,255,255,.55);background:transparent;transition:background .2s,color .2s}
+  .nav-item:hover{color:rgba(255,255,255,.85)}
+  .nav-item.active{background:var(--wine-grad);color:#fff}
+  .nav-item span{font-family:var(--font-display);font-weight:500;font-size:14px}
+  .profile{display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;background:rgba(255,255,255,.06)}
+  .avatar{width:34px;height:34px;border-radius:50%;background:var(--wine-grad);flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:600;font-size:13px;color:#fff}
+  .profile .name{font-family:var(--font-display);font-weight:500;font-size:13px;color:#fff}
+  .profile .role{font-size:12px;color:rgba(255,255,255,.45)}
+
+  /* ---------- Main ---------- */
+  main{flex:1;min-width:0;padding:36px 48px 64px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:32px}
+  h1{font-family:var(--font-display);font-weight:600;font-size:28px;margin:0}
+  .search{display:flex;align-items:center;gap:8px;background:#fff;box-shadow:inset 0 0 0 1px var(--stroke);
+    border-radius:10px;padding:10px 16px;width:260px;color:rgba(22,24,27,.4);font-size:14px}
+  .icon-btn{width:38px;height:38px;border-radius:10px;background:#fff;box-shadow:inset 0 0 0 1px var(--stroke);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--ink)}
+  .back{display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--ink);
+    font-family:var(--font-display);font-weight:500;font-size:15px}
+
+  /* ---------- Секции / карточки ---------- */
+  .sections{display:flex;flex-direction:column;gap:40px}
+  .eyebrow{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+  .eyebrow .badge{width:26px;height:26px;border-radius:8px;background:var(--wine-soft);
+    display:flex;align-items:center;justify-content:center;color:var(--wine)}
+  .eyebrow .label{font-family:var(--font-display);font-weight:600;font-size:13px;letter-spacing:.02em;
+    color:rgba(22,24,27,.5);text-transform:lowercase}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
+  .card{background:#fff;border-radius:20px;box-shadow:inset 0 0 0 1px var(--stroke);padding:26px;
+    display:flex;flex-direction:column;gap:14px}
+  .card.clickable{cursor:pointer;transition:box-shadow .2s}
+  .card.clickable:hover{box-shadow:inset 0 0 0 1px var(--wine)}
+  .card h3{font-family:var(--font-display);font-weight:600;font-size:18px;margin:0}
+  .card p{font-size:14px;line-height:1.5;color:rgba(22,24,27,.6);margin:0;flex:1}
+  .card-foot{display:flex;align-items:center;justify-content:space-between;margin-top:4px}
+  .chip{font-family:var(--font-body);font-weight:600;font-size:11px;padding:5px 10px;border-radius:4px}
+  .chip.ready{background:var(--wine-grad);color:#fff}
+  .chip.soon{background:var(--tonal);box-shadow:inset 0 0 0 1px var(--stroke);color:rgba(22,24,27,.5)}
+  .open-link{font-family:var(--font-display);font-weight:600;font-size:13px;color:var(--wine)}
+
+  /* ---------- Инструмент ---------- */
+  .tool{display:flex;flex-direction:column;gap:28px}
+  .tool .sub{font-size:14px;color:rgba(22,24,27,.55);margin:6px 0 0}
+  .controls{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .window-box{background:#fff;box-shadow:inset 0 0 0 1px var(--stroke);border-radius:10px;
+    padding:14px 18px;font-size:14px;color:var(--ink)}
+  .window-box b{font-family:var(--font-display)}
+  .checkbox{display:flex;align-items:center;gap:8px;font-size:14px;color:rgba(22,24,27,.7);cursor:pointer}
+  .btn{font-family:var(--font-display);font-weight:600;font-size:15px;color:#fff;background:var(--wine-grad);
+    border:none;border-radius:10px;padding:0 26px;height:52px;cursor:pointer;transition:filter .2s}
+  .btn:hover{filter:brightness(1.08)}
+  .btn:disabled{opacity:.5;cursor:default;filter:none}
+  .btn.secondary{background:var(--tonal);color:var(--ink);box-shadow:inset 0 0 0 1px var(--stroke)}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+  .stat{background:#fff;border-radius:20px;box-shadow:inset 0 0 0 1px var(--stroke);padding:22px 24px}
+  .stat.dark{background:var(--sidebar)}
+  .stat .num{font-family:var(--font-display);font-weight:600;font-size:30px;color:var(--ink)}
+  .stat.dark .num{color:#fff}
+  .stat .cap{font-size:13px;color:rgba(22,24,27,.55);margin-top:4px}
+  .stat.dark .cap{color:rgba(255,255,255,.6)}
+
+  .table-wrap{background:#fff;border-radius:20px;box-shadow:inset 0 0 0 1px var(--stroke);overflow:hidden}
+  .table-scroll{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;min-width:900px}
+  thead th{background:var(--tonal);font-family:var(--font-display);font-weight:600;font-size:12px;
+    color:rgba(22,24,27,.5);text-transform:lowercase;text-align:left;padding:14px 16px;white-space:nowrap}
+  tbody td{border-top:1px solid var(--row);padding:12px 16px;font-size:13px;vertical-align:middle}
+  tbody tr:hover{background:#FBFAFB}
+  .thumb{width:44px;height:44px;border-radius:8px;object-fit:cover;background:var(--tonal);display:block}
+  .thumb.ph{display:flex;align-items:center;justify-content:center;color:rgba(22,24,27,.3)}
+  .bc{font-family:var(--font-display);font-weight:600;color:var(--wine);white-space:nowrap}
+  .muted{color:rgba(22,24,27,.45)}
+  .hint{font-size:13px;color:rgba(22,24,27,.45)}
+  .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.5);border-top-color:#fff;
+    border-radius:50%;display:inline-block;animation:spin .7s linear infinite;vertical-align:-3px;margin-right:8px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hidden{display:none}
+  .error{background:var(--wine-soft);color:var(--wine);border-radius:10px;padding:12px 16px;font-size:14px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== Сайдбар (без логотипа) ===== -->
+  <aside class="sidebar">
+    <div>
+      <div class="brand">
+        <span class="title">Панель инструментов</span>
+        <span class="sub">внутренние утилиты</span>
+      </div>
+      <nav id="nav">
+        <div class="nav-item active" data-cat="all">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/></svg>
+          <span>Все инструменты</span>
+        </div>
+        <div class="nav-item" data-cat="sklad">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-5 9 5v10a1 1 0 01-1 1H4a1 1 0 01-1-1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 20v-6h8v6" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          <span>Мой склад</span>
+        </div>
+        <div class="nav-item" data-cat="reports">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v14H6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><line x1="9" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="9" y1="16" x2="16" y2="16" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          <span>Отчёты</span>
+        </div>
+      </nav>
+    </div>
+
+    <div class="profile">
+      <span class="avatar">СГ</span>
+      <div style="min-width:0">
+        <div class="name">City Group</div>
+        <div class="role">оператор склада</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <main>
+    <div class="topbar">
+      <div id="topbar-left"><h1 id="page-title">Все инструменты</h1></div>
+      <div style="display:flex;align-items:center;gap:16px;flex-shrink:0">
+        <div class="search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="opacity:.5"><circle cx="10" cy="10" r="6.5" stroke="currentColor" stroke-width="1.6"/><line x1="15" y1="15" x2="20" y2="20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span>Поиск инструмента…</span>
+        </div>
+        <div class="icon-btn">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M18 16v-5a6 6 0 10-12 0v5l-2 3h16z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 20a2 2 0 004 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Дашборд -->
+    <div id="dashboard" class="sections">
+      <section data-cat="sklad">
+        <div class="eyebrow">
+          <span class="badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-5 9 5v10a1 1 0 01-1 1H4a1 1 0 01-1-1z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
+          <span class="label">мой склад</span>
+        </div>
+        <div class="grid">
+          <div class="card clickable" id="open-assembly">
+            <h3>Лист сборки</h3>
+            <p>Собирает отгрузки за сутки (13:00–13:00) в таблицу: ячейка, товар, артикул, штрихкод, клиент, ссылка на этикетку и фото. Готовый XLSX.</p>
+            <div class="card-foot">
+              <span class="chip ready">готово</span>
+              <span class="open-link">Открыть →</span>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Остатки товаров</h3>
+            <p>Текущие остатки по складам и ячейкам с выгрузкой в таблицу.</p>
+            <div class="card-foot"><span class="chip soon">скоро</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section data-cat="reports">
+        <div class="eyebrow">
+          <span class="badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v14H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
+          <span class="label">отчёты</span>
+        </div>
+        <div class="grid">
+          <div class="card">
+            <h3>Выгрузка заказов</h3>
+            <p>Заказы покупателей за период с фильтрами по статусу и клиенту.</p>
+            <div class="card-foot"><span class="chip soon">скоро</span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Инструмент «Лист сборки» -->
+    <div id="tool" class="tool hidden">
+      <div>
+        <h1>Лист сборки</h1>
+        <p class="sub">Отгрузки за сутки (13:00–13:00). Формирует XLSX с ячейками, штрихкодами, артикулами и фото товаров.</p>
+      </div>
+
+      <div class="controls">
+        <div class="window-box">Окно выборки: <b id="win-start">…</b> — <b id="win-end">…</b></div>
+        <label class="checkbox"><input type="checkbox" id="with-images" checked> с фото товаров</label>
+        <button class="btn" id="gen-btn">Сформировать лист сборки</button>
+      </div>
+
+      <div id="err" class="error hidden"></div>
+
+      <div id="result" class="hidden" style="display:flex;flex-direction:column;gap:28px">
+        <div class="stats">
+          <div class="stat"><div class="num" id="s-demands">0</div><div class="cap">отгрузок</div></div>
+          <div class="stat"><div class="num" id="s-rows">0</div><div class="cap">строк в таблице</div></div>
+          <div class="stat"><div class="num" id="s-positions">0</div><div class="cap">позиций</div></div>
+          <div class="stat dark"><div class="num" id="s-win">—</div><div class="cap">окно суток</div></div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:16px">
+          <button class="btn" id="dl-btn">Скачать XLSX</button>
+          <span class="hint" id="dl-hint"></span>
+        </div>
+
+        <div class="table-wrap">
+          <div class="table-scroll">
+            <table>
+              <thead><tr>
+                <th>фото</th><th>ячейка</th><th>товар</th><th>артикул</th><th>штрихкод</th>
+                <th>кол-во</th><th>клиент</th><th>№ заказа</th><th>этикетка</th>
+              </tr></thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+// ---------- Навигация категорий ----------
+const navItems = [...document.querySelectorAll('.nav-item')];
+const titles = {all:'Все инструменты', sklad:'Мой склад', reports:'Отчёты'};
+function setCategory(cat){
+  navItems.forEach(n => n.classList.toggle('active', n.dataset.cat === cat));
+  $('page-title').textContent = titles[cat] || 'Все инструменты';
+  document.querySelectorAll('#dashboard section').forEach(s => {
+    s.style.display = (cat === 'all' || s.dataset.cat === cat) ? '' : 'none';
+  });
+  showDashboard();
+}
+navItems.forEach(n => n.addEventListener('click', () => setCategory(n.dataset.cat)));
+
+// ---------- Переключение вид дашборд / инструмент ----------
+function showTool(){ $('dashboard').classList.add('hidden'); $('tool').classList.remove('hidden');
+  $('topbar-left').innerHTML = ''; renderBack(); loadWindow(); }
+function showDashboard(){ $('tool').classList.add('hidden'); $('dashboard').classList.remove('hidden');
+  $('topbar-left').innerHTML = '<h1 id="page-title">'+($('page-title')?.textContent||'Все инструменты')+'</h1>'; }
+function renderBack(){
+  $('topbar-left').innerHTML =
+    '<div class="back" id="back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none">'+
+    '<line x1="19" y1="12" x2="5" y2="12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'+
+    '<polyline points="11,6 5,12 11,18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'+
+    '</svg><span>Назад к дашборду</span></div>';
+  $('back').addEventListener('click', () => { setCategory([...navItems].find(n=>n.classList.contains('active'))?.dataset.cat||'all'); });
+}
+$('open-assembly').addEventListener('click', showTool);
+
+// ---------- Окно выборки ----------
+async function loadWindow(){
+  try{
+    const r = await fetch('/api/window'); const w = await r.json();
+    $('win-start').textContent = w.start; $('win-end').textContent = w.end;
+  }catch(e){ $('win-start').textContent = '—'; $('win-end').textContent = '—'; }
+}
+
+// ---------- Генерация ----------
+$('gen-btn').addEventListener('click', async () => {
+  const btn = $('gen-btn');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Собираю данные…';
+  $('err').classList.add('hidden');
+  try{
+    const r = await fetch('/api/generate', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({download_images: $('with-images').checked})
+    });
+    const data = await r.json();
+    if(!r.ok){ throw new Error(data.error || ('HTTP '+r.status)); }
+    renderResult(data);
+  }catch(e){
+    $('err').textContent = 'Ошибка: ' + e.message;
+    $('err').classList.remove('hidden');
+  }finally{
+    btn.disabled = false; btn.textContent = orig;
+  }
+});
+
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function renderResult(data){
+  $('s-demands').textContent = data.stats.demands;
+  $('s-rows').textContent = data.stats.rows;
+  $('s-positions').textContent = data.stats.positions;
+  $('s-win').textContent = data.window.start.slice(5) + ' → ' + data.window.end.slice(5);
+  $('dl-hint').textContent = data.filename;
+
+  const tb = $('tbody'); tb.innerHTML = '';
+  const phSvg = '<div class="thumb ph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="9.5" r="1.4" stroke="currentColor" stroke-width="1.3"/><path d="M3 15l5-4 4 3 4-5 5 6" stroke="currentColor" stroke-width="1.3"/></svg></div>';
+  for(const row of data.rows){
+    const photo = row.photo ? `<img class="thumb" src="${row.photo}" alt="">` : phSvg;
+    const barcode = row.barcode ? `<span class="bc">${esc(row.barcode).replace(/\n/g,'<br>')}</span>` : '<span class="muted">—</span>';
+    const label = row.label ? `<a href="${esc(row.label)}" target="_blank">открыть</a>` : '<span class="muted">—</span>';
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td>${photo}</td>`+
+      `<td>${esc(row.cell)||'<span class="muted">—</span>'}</td>`+
+      `<td>${esc(row.product)}</td>`+
+      `<td>${esc(row.article)||'<span class="muted">—</span>'}</td>`+
+      `<td>${barcode}</td>`+
+      `<td>${esc(row.qty)}</td>`+
+      `<td>${esc(row.client)}</td>`+
+      `<td>${esc(row.order)}</td>`+
+      `<td>${label}</td>`;
+    tb.appendChild(tr);
+  }
+  $('result').classList.remove('hidden');
+}
+
+$('dl-btn').addEventListener('click', () => { window.location = '/api/download'; });
+
+// стартовое состояние
+setCategory('all');
+</script>
+</body>
+</html>

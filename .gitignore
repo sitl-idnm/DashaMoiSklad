@@ -1,0 +1,19 @@
+# Секреты
+.env
+
+# Артефакты
+output/
+_img_cache/
+*.xlsx
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ОС / редакторы
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
