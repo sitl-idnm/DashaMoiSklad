@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 
+type DataRow = { [column: string]: string | number }
 interface Sheet {
   id: number
   filename: string
@@ -10,6 +11,7 @@ interface Sheet {
   demands: number
   positions: number
   rows: number
+  data: DataRow[]
   created_at: string
   url: string | null
 }
@@ -17,6 +19,12 @@ interface Win {
   startStr: string
   endStr: string
 }
+
+// Колонки внутренней (раскрывающейся) таблицы — порядок как в XLSX, без фото.
+const DATA_COLS = [
+  'Ячейка', 'Товар', 'Артикул', 'Штрихкод', 'Кол-во',
+  'Клиент', '№ заказа', 'Ссылка на этикетку', 'Дата заказа'
+] as const
 
 const CATS = { all: 'Все инструменты', sklad: 'Мой склад', reports: 'Отчёты' } as const
 type Cat = keyof typeof CATS
@@ -30,6 +38,20 @@ export default function Panel() {
   const [loading, setLoading] = useState(false)
   const [gen, setGen] = useState(false)
   const [err, setErr] = useState('')
+  const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  const [rangeStart, setRangeStart] = useState('')
+  const [rangeEnd, setRangeEnd] = useState('')
+  const [rangeImages, setRangeImages] = useState(true)
+  const [genR, setGenR] = useState(false)
+
+  function toggle(id: number) {
+    setExpanded((prev) => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  }
 
   async function loadSheets() {
     setLoading(true)
@@ -65,6 +87,38 @@ export default function Panel() {
     }
   }
 
+  async function generateRange() {
+    if (!rangeStart || !rangeEnd) {
+      setErr('Укажите начало и конец периода')
+      return
+    }
+    setGenR(true)
+    setErr('')
+    try {
+      const r = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          start: toBackendDate(rangeStart),
+          end: toBackendDate(rangeEnd),
+          downloadImages: rangeImages
+        })
+      })
+      const d = await r.json()
+      if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`)
+      await loadSheets()
+    } catch (e: any) {
+      setErr('Ошибка генерации за период: ' + String(e?.message || e))
+    } finally {
+      setGenR(false)
+    }
+  }
+
+  async function logout() {
+    await fetch('/api/logout', { method: 'POST' })
+    window.location.href = '/login'
+  }
+
   const openTool = () => setView('tool')
   const back = () => setView('dashboard')
   const total = sheets.reduce((a, s) => a + (s.rows || 0), 0)
@@ -91,10 +145,13 @@ export default function Panel() {
         </div>
         <div className="profile">
           <span className="avatar">СГ</span>
-          <div style={{ minWidth: 0 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <div className="name">City Group</div>
             <div className="role">оператор склада</div>
           </div>
+          <button className="logout" onClick={logout} title="Выйти" aria-label="Выйти">
+            <IconLogout />
+          </button>
         </div>
       </aside>
 
@@ -163,6 +220,31 @@ export default function Panel() {
               </button>
             </div>
 
+            <div className="range-card">
+              <div className="range-head">
+                <IconCalendar />
+                <span>Собрать за произвольный период</span>
+              </div>
+              <div className="range-row">
+                <label className="range-field">
+                  <span>Начало</span>
+                  <input type="datetime-local" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} />
+                </label>
+                <label className="range-field">
+                  <span>Конец</span>
+                  <input type="datetime-local" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} />
+                </label>
+                <label className="checkbox">
+                  <input type="checkbox" checked={rangeImages} onChange={(e) => setRangeImages(e.target.checked)} />
+                  с фото
+                </label>
+                <button className="btn" onClick={generateRange} disabled={genR}>
+                  {genR ? <><span className="spinner" />Собираю…</> : 'Собрать за период'}
+                </button>
+              </div>
+              <p className="hint">Границы — по московскому времени. Большой период с фото собирается дольше.</p>
+            </div>
+
             {!configured && (
               <div className="error">Supabase не настроен: задайте SUPABASE_URL и SUPABASE_ANON_KEY в переменных окружения.</div>
             )}
@@ -179,24 +261,67 @@ export default function Panel() {
               <div className="table-scroll">
                 <table>
                   <thead>
-                    <tr><th>окно суток</th><th>файл</th><th>отгрузок</th><th>позиций</th><th>строк</th><th>создан</th><th>скачать</th></tr>
+                    <tr><th></th><th>дата / окно суток</th><th>отгрузок</th><th>позиций</th><th>строк</th><th>создан</th><th>скачать</th></tr>
                   </thead>
                   <tbody>
                     {loading && <tr><td colSpan={7} className="muted">Загрузка…</td></tr>}
                     {!loading && sheets.length === 0 && (
                       <tr><td colSpan={7} className="muted">Пока нет готовых листов. Нажмите «Сформировать сейчас» или дождитесь ежедневного запуска.</td></tr>
                     )}
-                    {sheets.map((s) => (
-                      <tr key={s.id}>
-                        <td>{fmtWin(s.window_start)} → {fmtWin(s.window_end)}</td>
-                        <td>{s.filename}</td>
-                        <td>{s.demands}</td>
-                        <td>{s.positions}</td>
-                        <td>{s.rows}</td>
-                        <td className="muted">{fmtDt(s.created_at)}</td>
-                        <td>{s.url ? <a className="dl" href={s.url}>скачать ↓</a> : <span className="muted">—</span>}</td>
-                      </tr>
-                    ))}
+                    {sheets.map((s) => {
+                      const open = expanded.has(s.id)
+                      return (
+                        <Fragment key={s.id}>
+                          <tr className={open ? 'row-open' : ''}>
+                            <td>
+                              <button
+                                className={`chevron ${open ? 'up' : ''}`}
+                                onClick={() => toggle(s.id)}
+                                aria-label={open ? 'Свернуть' : 'Развернуть'}
+                                title={open ? 'Свернуть' : 'Показать таблицу'}
+                              >
+                                <IconChevron />
+                              </button>
+                            </td>
+                            <td>
+                              <div className="row-date">
+                                <span className="date-badge">{dateBadge(s.window_end)}</span>
+                                <span className="win-range">{fmtWin(s.window_start)} → {fmtWin(s.window_end)}</span>
+                              </div>
+                            </td>
+                            <td>{s.demands}</td>
+                            <td>{s.positions}</td>
+                            <td>{s.rows}</td>
+                            <td className="muted">{fmtDt(s.created_at)}</td>
+                            <td>{s.url ? <a className="dl" href={s.url}>скачать ↓</a> : <span className="muted">—</span>}</td>
+                          </tr>
+                          {open && (
+                            <tr className="detail-row">
+                              <td colSpan={7}>
+                                {s.data && s.data.length > 0 ? (
+                                  <div className="detail-scroll">
+                                    <table className="detail-table">
+                                      <thead>
+                                        <tr>{DATA_COLS.map((c) => <th key={c}>{c}</th>)}</tr>
+                                      </thead>
+                                      <tbody>
+                                        {s.data.map((row, i) => (
+                                          <tr key={i}>
+                                            {DATA_COLS.map((c) => <td key={c}>{formatCell(c, row[c])}</td>)}
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                ) : (
+                                  <div className="muted" style={{ padding: '4px 2px' }}>Данных по строкам нет (пустое окно или лист собран старой версией).</div>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -218,11 +343,34 @@ function fmtDt(iso: string) {
   const p = (n: number) => String(n).padStart(2, '0')
   return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
+const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
+/** Компактная дата для винного бейджа: день + короткий месяц (по дате конца окна). */
+function dateBadge(iso: string) {
+  const d = new Date(iso)
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}`
+}
+/** datetime-local ("2026-07-01T13:00") -> формат бэкенда "2026-07-01 13:00:00". */
+function toBackendDate(v: string) {
+  if (!v) return ''
+  const [date, time = '00:00'] = v.split('T')
+  const t = time.length === 5 ? `${time}:00` : time
+  return `${date} ${t}`
+}
+/** Ссылку на этикетку укорачиваем, остальное — как есть. */
+function formatCell(col: string, value: string | number | undefined) {
+  if (value === undefined || value === null || value === '') return '—'
+  const s = String(value)
+  if (col === 'Ссылка на этикетку' && s.length > 40) return `${s.slice(0, 37)}…`
+  return s
+}
 
 /* ---------- Иконки ---------- */
+function IconChevron() { return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polyline points="6,9 12,15 18,9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>) }
+function IconCalendar() { return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.6" /><line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" strokeWidth="1.6" /><line x1="8" y1="3" x2="8" y2="6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><line x1="16" y1="3" x2="16" y2="6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>) }
 function IconGrid() { return (<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" /><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" /><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" /><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" /></svg>) }
 function IconWarehouse({ s = 18 }: { s?: number }) { return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M3 9l9-5 9 5v10a1 1 0 01-1 1H4a1 1 0 01-1-1z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /><path d="M8 20v-6h8v6" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>) }
 function IconDoc({ s = 18 }: { s?: number }) { return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v14H6z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /><line x1="9" y1="12" x2="16" y2="12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /><line x1="9" y1="16" x2="16" y2="16" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>) }
 function IconBack() { return (<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><line x1="19" y1="12" x2="5" y2="12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><polyline points="11,6 5,12 11,18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>) }
 function IconSearch() { return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ opacity: .5 }}><circle cx="10" cy="10" r="6.5" stroke="currentColor" strokeWidth="1.6" /><line x1="15" y1="15" x2="20" y2="20" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>) }
 function IconBell() { return (<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M18 16v-5a6 6 0 10-12 0v5l-2 3h16z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" /><path d="M10 20a2 2 0 004 0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>) }
+function IconLogout() { return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 4h3a1 1 0 011 1v14a1 1 0 01-1 1h-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /><path d="M10 8l-4 4 4 4M6 12h11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>) }

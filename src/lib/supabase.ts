@@ -27,6 +27,9 @@ export function supabaseConfigured(): boolean {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY)
 }
 
+/** Одна строка отчёта в текстовом виде (без фото) — для показа в интерфейсе. */
+export type SheetDataRow = { [column: string]: string | number }
+
 export interface SheetRow {
   id: number
   window_start: string
@@ -36,6 +39,7 @@ export interface SheetRow {
   demands: number
   positions: number
   rows: number
+  data: SheetDataRow[]
   created_at: string
 }
 
@@ -60,20 +64,23 @@ export async function uploadXlsx(path: string, buffer: Buffer): Promise<void> {
   }
 }
 
-/** Вставка строки метаданных отчёта (service-role, обходит RLS). */
+/** Upsert строки метаданных отчёта по окну (service-role, обходит RLS). */
 export async function insertSheet(row: Omit<SheetRow, 'id' | 'created_at'>): Promise<void> {
   const key = serviceKey()
-  const res = await fetch(`${base()}/rest/v1/${TABLE}`, {
-    method: 'POST',
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=minimal'
-    },
-    body: JSON.stringify(row),
-    cache: 'no-store'
-  })
+  const res = await fetch(
+    `${base()}/rest/v1/${TABLE}?on_conflict=window_start,window_end`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal,resolution=merge-duplicates'
+      },
+      body: JSON.stringify(row),
+      cache: 'no-store'
+    }
+  )
   if (!res.ok) {
     const t = await res.text().catch(() => '')
     throw new Error(`Insert failed: ${res.status} ${t}`)
@@ -89,6 +96,20 @@ export async function listSheets(limit = 60): Promise<SheetRow[]> {
   )
   if (!res.ok) throw new Error(`List failed: ${res.status}`)
   return res.json()
+}
+
+/** Учётка панели по логину (service-role, обходит RLS). null — если нет. */
+export async function getAuthUser(
+  username: string
+): Promise<{ salt: string; password_hash: string } | null> {
+  const key = serviceKey()
+  const res = await fetch(
+    `${base()}/rest/v1/moi_sklad_auth?select=salt,password_hash&username=eq.${encodeURIComponent(username)}&limit=1`,
+    { headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: 'no-store' }
+  )
+  if (!res.ok) throw new Error(`Auth lookup failed: ${res.status}`)
+  const rows = (await res.json()) as { salt: string; password_hash: string }[]
+  return rows[0] ?? null
 }
 
 /** Подписанная ссылка на скачивание файла из приватного бакета (service-role). */

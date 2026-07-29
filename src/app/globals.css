@@ -34,6 +34,10 @@ nav{display:flex;flex-direction:column;gap:4px}
   display:flex;align-items:center;justify-content:center;font-family:var(--font-inter);font-weight:600;font-size:13px;color:#fff}
 .profile .name{font-family:var(--font-inter);font-weight:500;font-size:13px;color:#fff}
 .profile .role{font-size:12px;color:rgba(255,255,255,.45)}
+.logout{flex-shrink:0;width:32px;height:32px;border-radius:8px;border:none;cursor:pointer;
+  background:rgba(255,255,255,.08);color:rgba(255,255,255,.6);
+  display:flex;align-items:center;justify-content:center;transition:background .2s,color .2s}
+.logout:hover{background:var(--wine-grad);color:#fff}
 
 /* Main */
 main{flex:1;min-width:0;padding:36px 48px 64px}
@@ -101,3 +105,55 @@ tbody tr:hover{background:#FBFAFB}
 @keyframes spin{to{transform:rotate(360deg)}}
 .error{background:var(--wine-soft);color:var(--wine);border-radius:10px;padding:12px 16px;font-size:14px}
 .dl{font-family:var(--font-inter);font-weight:600;font-size:13px;color:var(--wine)}
+
+/* Логин */
+.login-page{min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(120% 120% at 50% 0%,#2b2a31 0%,var(--sidebar) 60%)}
+.login-card{width:360px;max-width:calc(100vw - 40px);background:#fff;border-radius:24px;
+  padding:36px 32px;display:flex;flex-direction:column;gap:18px;
+  box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.login-brand{display:flex;flex-direction:column;gap:4px;margin-bottom:6px}
+.login-title{font-family:var(--font-inter);font-weight:600;font-size:20px;color:var(--ink)}
+.login-sub{font-size:13px;color:rgba(22,24,27,.5)}
+.login-field{display:flex;flex-direction:column;gap:7px}
+.login-field span{font-family:var(--font-inter);font-weight:500;font-size:13px;color:rgba(22,24,27,.6)}
+.login-field input{font-family:var(--font-manrope);font-size:15px;color:var(--ink);
+  background:var(--tonal);border:none;box-shadow:inset 0 0 0 1px var(--stroke);
+  border-radius:10px;padding:13px 15px;outline:none;transition:box-shadow .15s}
+.login-field input:focus{box-shadow:inset 0 0 0 1.5px var(--wine)}
+.login-card .btn{height:50px;width:100%;justify-content:center;display:flex;align-items:center;margin-top:4px}
+
+/* Ручная генерация за период */
+.range-card{background:#fff;border-radius:20px;box-shadow:inset 0 0 0 1px var(--stroke);padding:22px 24px;
+  display:flex;flex-direction:column;gap:16px}
+.range-head{display:flex;align-items:center;gap:9px;font-family:var(--font-inter);font-weight:600;
+  font-size:15px;color:var(--ink)}
+.range-head svg{color:var(--wine)}
+.range-row{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.range-field{display:flex;flex-direction:column;gap:6px}
+.range-field span{font-size:12px;color:rgba(22,24,27,.55)}
+.range-field input{font-family:var(--font-manrope);font-size:14px;color:var(--ink);background:var(--tonal);
+  border:none;box-shadow:inset 0 0 0 1px var(--stroke);border-radius:10px;padding:11px 13px;outline:none}
+.range-field input:focus{box-shadow:inset 0 0 0 1.5px var(--wine)}
+.range-row .btn{height:44px}
+.range-row .checkbox{padding-bottom:12px}
+
+/* Бейдж даты + раскрытие строки */
+.chevron{width:30px;height:30px;border-radius:8px;border:none;cursor:pointer;background:var(--tonal);
+  box-shadow:inset 0 0 0 1px var(--stroke);color:rgba(22,24,27,.6);display:flex;align-items:center;
+  justify-content:center;transition:background .2s,color .2s,transform .2s}
+.chevron:hover{background:var(--wine-soft);color:var(--wine)}
+.chevron.up{transform:rotate(180deg);background:var(--wine-grad);color:#fff;box-shadow:none}
+.row-date{display:flex;align-items:center;gap:12px}
+.date-badge{flex-shrink:0;min-width:52px;height:40px;padding:0 8px;border-radius:10px;background:var(--wine-grad);
+  color:#fff;font-family:var(--font-inter);font-weight:600;font-size:13px;line-height:1.05;
+  display:flex;align-items:center;justify-content:center;text-align:center;white-space:nowrap}
+.win-range{font-size:13px;color:rgba(22,24,27,.7);white-space:nowrap}
+tr.row-open>td{background:var(--wine-soft)}
+tr.detail-row>td{background:#FBFAFB;padding:0 16px 16px}
+.detail-scroll{overflow-x:auto;border-radius:12px;box-shadow:inset 0 0 0 1px var(--stroke);background:#fff;margin-top:2px}
+table.detail-table{min-width:900px;border-collapse:collapse;width:100%}
+table.detail-table thead th{background:var(--tonal);font-family:var(--font-inter);font-weight:600;font-size:11px;
+  color:rgba(22,24,27,.5);text-transform:none;text-align:left;padding:9px 12px;white-space:nowrap;position:sticky;top:0}
+table.detail-table tbody td{border-top:1px solid var(--row);padding:8px 12px;font-size:12px;vertical-align:top;
+  max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:pre-line}

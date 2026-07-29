@@ -36,6 +36,9 @@ export async function generateAndStore(
   const filename = `assembly_sheet_${slug(startStr)}__${slug(endStr)}.xlsx`
   const storage_path = `sheets/${filename}`
 
+  // Текстовые строки без бинарных фото — их показываем в раскрывающейся таблице.
+  const data = report.records.map(({ image, ...rest }) => rest)
+
   await uploadXlsx(storage_path, xlsx)
   await insertSheet({
     window_start: toIso(startStr),
@@ -44,7 +47,8 @@ export async function generateAndStore(
     storage_path,
     demands: report.stats.demands,
     positions: report.stats.positions,
-    rows: report.stats.rows
+    rows: report.stats.rows,
+    data
   })
 
   return {
