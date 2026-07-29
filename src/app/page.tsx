@@ -261,9 +261,9 @@ export default function Panel() {
             {err && <div className="error">{err}</div>}
 
             <div className="stats">
-              <div className="stat"><div className="num">{visible.length}</div><div className="cap">{tab === 'auto' ? 'дней с отгрузками' : 'ручных отчётов'}</div></div>
-              <div className="stat"><div className="num">{inTab[0]?.demands ?? 0}</div><div className="cap">отгрузок (последний)</div></div>
-              <div className="stat"><div className="num">{total}</div><div className="cap">строк всего</div></div>
+              <div className="stat"><div className="num"><CountUp value={visible.length} /></div><div className="cap">{tab === 'auto' ? 'дней с отгрузками' : 'ручных отчётов'}</div></div>
+              <div className="stat"><div className="num"><CountUp value={inTab[0]?.demands ?? 0} /></div><div className="cap">отгрузок (последний)</div></div>
+              <div className="stat"><div className="num"><CountUp value={total} /></div><div className="cap">строк всего</div></div>
               <div className="stat dark"><div className="num">13:00</div><div className="cap">граница суток</div></div>
             </div>
 
@@ -393,6 +393,26 @@ function DateBadge({ iso }: { iso: string }) {
 function fmtDay(iso: string) {
   const d = new Date(iso)
   return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`
+}
+/** Плавный счётчик числа (0 → value) с ease-out; уважает reduced-motion. */
+function CountUp({ value, duration = 800 }: { value: number; duration?: number }) {
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      setN(value)
+      return
+    }
+    let raf = 0
+    const start = performance.now()
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / duration)
+      setN(Math.round(value * (1 - Math.pow(1 - p, 3))))
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [value, duration])
+  return <>{n}</>
 }
 /** datetime-local ("2026-07-01T13:00") -> формат бэкенда "2026-07-01 13:00:00". */
 function toBackendDate(v: string) {
