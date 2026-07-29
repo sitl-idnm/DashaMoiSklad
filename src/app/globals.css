@@ -207,19 +207,17 @@ table.detail-table tbody td{border-top:1px solid var(--row);padding:8px 12px;fon
 .chevron{transition:background .2s,color .2s,transform .3s cubic-bezier(.4,0,.2,1)}
 .sheet-detail .detail-scroll{animation:expandIn .28s ease both}
 
-/* Графики рисуются, когда карточка попала в вьюпорт */
-.chart-line{stroke-dasharray:1;stroke-dashoffset:1}
-.chart-card.in .chart-line{animation:drawLine 1.1s cubic-bezier(.4,0,.2,1) forwards}
-.chart-area{opacity:0}
-.chart-card.in .chart-area{animation:fadeIn .8s .35s ease forwards}
+/* Графики оживают, когда карточка попала в вьюпорт */
 .bar-fill{width:0;transition:width .9s cubic-bezier(.2,.7,.2,1)}
 .chart-card.in .bar-fill{width:var(--w)}
+.daybar-fill{height:0;transition:height 1s cubic-bezier(.2,.7,.2,1)}
+.chart-card.in .daybar-fill{height:var(--h)}
 
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
     transition-duration:.001ms!important}
   .stat,.range-card,.list-bar,.sheet-card,.sections .card,.kpi,.chart-card{opacity:1}
-  .chart-line{stroke-dashoffset:0}.chart-area{opacity:1}.bar-fill{width:var(--w)}
+  .bar-fill{width:var(--w)}.daybar-fill{height:var(--h)}
 }
 
 /* ---------- Список листов карточками ---------- */
@@ -268,7 +266,12 @@ table.detail-table tbody td{border-top:1px solid var(--row);padding:8px 12px;fon
 .kpi.accent .kpi-cap{color:rgba(255,255,255,.6)}
 .chart-card{background:#fff;border-radius:8px;box-shadow:inset 0 0 0 1px var(--stroke),var(--shadow-card);padding:22px 24px}
 .chart-head{font-family:var(--font-inter);font-weight:600;font-size:15px;color:var(--ink);margin-bottom:18px}
-.chart-svg{width:100%;height:210px;display:block}
+.daybars{display:flex;align-items:flex-end;gap:8px;height:220px}
+.daybar{flex:1;min-width:0;height:100%;display:flex;flex-direction:column}
+.daybar-col{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px}
+.daybar-val{font-family:var(--font-inter);font-weight:600;font-size:11px;color:rgba(22,24,27,.5);line-height:1}
+.daybar-fill{width:100%;max-width:44px;min-height:2px;border-radius:6px 6px 0 0;background:var(--wine-grad)}
+.daybar-x{text-align:center;font-size:11px;color:rgba(22,24,27,.45);padding-top:8px;white-space:nowrap}
 .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .bar-list{display:flex;flex-direction:column;gap:16px}
 .bar-row{display:flex;flex-direction:column;gap:7px}

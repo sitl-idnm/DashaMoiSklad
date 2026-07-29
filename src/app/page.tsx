@@ -442,7 +442,7 @@ export default function Panel() {
 
                 <div className="chart-card">
                   <div className="chart-head">Активность по дням — единиц отгружено</div>
-                  <AreaChart series={summary.series || []} />
+                  <DayBars series={summary.series || []} />
                 </div>
 
                 <div className="chart-grid">
@@ -492,28 +492,29 @@ function fmtDay(iso: string) {
   return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`
 }
 
-/** Area-график активности по дням. Линия «рисуется», заливка проявляется (по .in родителя). */
-function AreaChart({ series }: { series: { date: string; units: number }[] }) {
-  const W = 720, H = 210, P = 10
+/** Столбики активности по дням. Высота растёт при попадании карточки в вьюпорт (.in). */
+function DayBars({ series }: { series: { date: string; units: number }[] }) {
   const data = series.length ? series : [{ date: '', units: 0 }]
   const max = Math.max(1, ...data.map((d) => d.units))
   const n = data.length
-  const x = (i: number) => (n <= 1 ? W / 2 : P + (i * (W - 2 * P)) / (n - 1))
-  const y = (v: number) => H - P - (v / max) * (H - 2 * P - 6)
-  const line = data.map((d, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(d.units).toFixed(1)}`).join(' ')
-  const area = `${line} L${x(n - 1).toFixed(1)},${H - P} L${x(0).toFixed(1)},${H - P} Z`
+  const step = Math.max(1, Math.ceil(n / 14))
   return (
-    <svg className="chart-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img">
-      <defs>
-        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--wine)" stopOpacity="0.26" />
-          <stop offset="100%" stopColor="var(--wine)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path className="chart-area" d={area} fill="url(#areaGrad)" />
-      <path className="chart-line" d={line} fill="none" stroke="var(--wine)" strokeWidth="2.5"
-        pathLength={1} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
+    <div className="daybars">
+      {data.map((d, i) => {
+        const dd = d.date ? d.date.slice(8, 10) : ''
+        const showLabel = i % step === 0 || i === n - 1
+        const h = Math.round((d.units / max) * 86)
+        return (
+          <div className="daybar" key={d.date + i} title={`${d.date}: ${d.units} ед`}>
+            <div className="daybar-col">
+              <span className="daybar-val">{d.units > 0 ? d.units : ''}</span>
+              <div className="daybar-fill" style={{ ['--h']: `${h}%` } as CSSProperties} />
+            </div>
+            <span className="daybar-x">{showLabel ? dd : ''}</span>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
