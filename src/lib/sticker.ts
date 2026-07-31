@@ -1,5 +1,4 @@
 import 'server-only'
-import { PDFParse } from 'pdf-parse'
 
 /**
  * Номер WB-стикера из текста PDF-этикетки MPsklad.
@@ -22,6 +21,9 @@ export async function fetchStickerNumber(url: string): Promise<string> {
       const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
       if (!res.ok) continue
       const buf = Buffer.from(await res.arrayBuffer())
+      // Ленивый импорт: если pdf-parse не загрузится в среде Vercel — стикер
+      // останется пустым, но роут не упадёт с 500.
+      const { PDFParse } = await import('pdf-parse')
       const parser = new PDFParse({ data: buf })
       const r = await parser.getText()
       const num = parseStickerNumber(r.text || '')
