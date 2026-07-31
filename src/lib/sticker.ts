@@ -20,13 +20,14 @@ export async function fetchStickerNumber(url: string): Promise<string> {
     try {
       const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
       if (!res.ok) continue
-      const buf = Buffer.from(await res.arrayBuffer())
-      // Ленивый импорт: если pdf-parse не загрузится в среде Vercel — стикер
-      // останется пустым, но роут не упадёт с 500.
-      const { PDFParse } = await import('pdf-parse')
-      const parser = new PDFParse({ data: buf })
-      const r = await parser.getText()
-      const num = parseStickerNumber(r.text || '')
+      const buf = new Uint8Array(await res.arrayBuffer())
+      // unpdf — извлечение текста из PDF, собран под serverless (Vercel/Workers).
+      // Ленивый импорт + try/catch: если не загрузится — стикер пустой, роут жив.
+      const { extractText, getDocumentProxy } = await import('unpdf')
+      const pdf = await getDocumentProxy(buf)
+      const { text } = await extractText(pdf, { mergePages: true })
+      const full = Array.isArray(text) ? text.join('\n') : text
+      const num = parseStickerNumber(full || '')
       if (num) return num
     } catch {
       // повторим
