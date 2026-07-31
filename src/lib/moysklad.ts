@@ -44,14 +44,24 @@ function authHeader(): string {
   return 'Basic ' + Buffer.from(`${login}:${password}`).toString('base64')
 }
 
-// ---------------- Запрос с ретраем на 429 ----------------
+// ---------------- Запрос с ретраем на 429 и сетевые сбои ----------------
 async function msGet(path: string): Promise<any> {
   const url = path.startsWith('http') ? path : `${BASE}${path}`
+  let netAttempts = 0
   for (;;) {
-    const res = await fetch(url, {
-      headers: { Authorization: authHeader(), 'Accept-Encoding': 'gzip' },
-      cache: 'no-store'
-    })
+    let res: globalThis.Response
+    try {
+      res = await fetch(url, {
+        headers: { Authorization: authHeader(), 'Accept-Encoding': 'gzip' },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(30000)
+      })
+    } catch (e) {
+      // Сетевой сбой (socket hang up / fetch failed / timeout) — ретрай с бэкоффом.
+      if (++netAttempts > 4) throw e
+      await new Promise((r) => setTimeout(r, 400 * netAttempts))
+      continue
+    }
     if (res.status === 429) {
       const retry = Number(res.headers.get('X-Lognex-Retry-After') || 2000)
       await new Promise((r) => setTimeout(r, retry || 2000))
@@ -66,16 +76,20 @@ async function msGet(path: string): Promise<any> {
 }
 
 async function msGetBuffer(url: string): Promise<Buffer | null> {
-  try {
-    const res = await fetch(url, {
-      headers: { Authorization: authHeader(), 'Accept-Encoding': 'gzip' },
-      cache: 'no-store'
-    })
-    if (!res.ok) return null
-    return Buffer.from(await res.arrayBuffer())
-  } catch {
-    return null
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: authHeader(), 'Accept-Encoding': 'gzip' },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(20000)
+      })
+      if (!res.ok) return null
+      return Buffer.from(await res.arrayBuffer())
+    } catch {
+      await new Promise((r) => setTimeout(r, 300 * (attempt + 1)))
+    }
   }
+  return null
 }
 
 function idFromHref(href?: string): string {
@@ -161,6 +175,14 @@ function extractBarcodes4(assortment: any): string[] {
   return result
 }
 
+// Заказы с этими статусами (по префиксу имени) в лист сборки не попадают.
+// Ловит «Отменен» и «Отменен продавцом».
+const EXCLUDED_STATE_PREFIX = 'отмен'
+function isExcludedOrder(order: any): boolean {
+  const name = (order.state?.name || '').trim().toLowerCase()
+  return name.startsWith(EXCLUDED_STATE_PREFIX)
+}
+
 function extractEtiketka(order: any): string {
   for (const attr of order?.attributes || []) {
     if ((attr.name || '').trim().toLowerCase() === ETIKETKA_ATTR.toLowerCase()) {
@@ -198,33 +220,40 @@ async function downloadImage(
   return buf
 }
 
-// ---------------- Загрузка отгрузок ----------------
-async function fetchDemands(startStr: string, endStr: string): Promise<any[]> {
-  const filter = encodeURIComponent(`moment>=${startStr};moment<${endStr}`)
-  const expand = 'organization,positions.assortment,customerOrder'
-  const demands: any[] = []
+// ---------------- Загрузка сущностей за окно ----------------
+async function fetchByWindow(
+  entity: string,
+  startStr: string,
+  endStr: string | undefined,
+  expand: string
+): Promise<any[]> {
+  // Без endStr — открытая верхняя граница (нужно для отгрузок: их создают
+  // позже заказа, иногда уже за концом окна).
+  const cond = endStr ? `moment>=${startStr};moment<${endStr}` : `moment>=${startStr}`
+  const filter = encodeURIComponent(cond)
+  const rows: any[] = []
   let offset = 0
   for (;;) {
     const data = await msGet(
-      `/entity/demand?limit=100&offset=${offset}&order=moment,desc&expand=${expand}&filter=${filter}`
+      `/entity/${entity}?limit=100&offset=${offset}&order=moment,desc&expand=${expand}&filter=${filter}`
     )
-    const rows = data.rows || []
-    demands.push(...rows)
+    const chunk = data.rows || []
+    rows.push(...chunk)
     const size = data.meta?.size ?? 0
-    if (rows.length === 0 || offset + rows.length >= size) break
+    if (chunk.length === 0 || offset + chunk.length >= size) break
     offset += data.meta?.limit ?? 100
   }
-  return demands
+  return rows
 }
 
-async function getPositions(demand: any): Promise<any[]> {
-  const posObj = demand.positions || {}
+async function getPositions(entity: string, item: any): Promise<any[]> {
+  const posObj = item.positions || {}
   const rows: any[] = [...(posObj.rows || [])]
   const size = posObj.meta?.size ?? rows.length
   let offset = rows.length
   while (rows.length < size) {
     const data = await msGet(
-      `/entity/demand/${demand.id}/positions?expand=assortment&limit=100&offset=${offset}`
+      `/entity/${entity}/${item.id}/positions?expand=assortment&limit=100&offset=${offset}`
     )
     const chunk = data.rows || []
     if (chunk.length === 0) break
@@ -232,6 +261,12 @@ async function getPositions(demand: any): Promise<any[]> {
     offset += chunk.length
   }
   return rows
+}
+
+/** id товара/модификации позиции (для сопоставления заказ ↔ отгрузка). */
+function assortmentId(pos: any): string {
+  const a = pos.assortment || {}
+  return a.id || idFromHref(a.meta?.href)
 }
 
 function cellSortKey(cell: string): [number, number] {
@@ -251,22 +286,53 @@ export async function buildReport(
     endStr = w.endStr
   }
 
-  const demands = await fetchDemands(startStr, endStr)
+  // Драйвер — ЗАКАЗЫ покупателей за окно (organization → Клиент,
+  // positions.assortment → товар/артикул/штрихкод/фото, attributes → этикетка).
+  const orders = (
+    await fetchByWindow(
+      'customerorder',
+      startStr,
+      endStr,
+      'organization,positions.assortment,state'
+    )
+  ).filter((o) => !isExcludedOrder(o))
+
+  // Отгрузки от начала окна и до «сейчас» (без верхней границы) — только чтобы
+  // взять ЯЧЕЙКУ (slot) по совпадению номера (demand.name == order.name).
+  // Отгрузку часто создают позже заказа, поэтому верхнюю границу не ставим.
+  const demands = await fetchByWindow('demand', startStr, undefined, 'positions.assortment')
+
   const slotCache = new Map<string, Map<string, string>>()
   const imgCache = new Map<string, Buffer | null>()
+
+  // Карта: номер заказа → (id товара → ячейка) из отгрузки.
+  const orderNames = new Set(orders.map((o) => String(o.name)))
+  const cellByOrder = new Map<string, Map<string, string>>()
+  for (const d of demands) {
+    const name = String(d.name || '')
+    if (!orderNames.has(name)) continue
+    const dp = await getPositions('demand', d)
+    const m = new Map<string, string>()
+    for (const pos of dp) {
+      const aid = assortmentId(pos)
+      if (aid) m.set(aid, await extractCell(d, pos, slotCache))
+    }
+    cellByOrder.set(name, m)
+  }
+
   const records: Record[] = []
   let totalPositions = 0
   let revenueKopecks = 0
 
-  for (const demand of demands) {
-    revenueKopecks += Number(demand.sum) || 0
-    const order = demand.customerOrder || {}
-    const number = demand.name || ''
-    const org = demand.organization?.name || ''
+  for (const order of orders) {
+    revenueKopecks += Number(order.sum) || 0
+    const number = String(order.name || '')
+    const org = order.organization?.name || ''
     const etiketka = extractEtiketka(order)
-    const orderDate = order.moment || demand.moment || ''
+    const orderDate = order.moment || ''
+    const cellMap = cellByOrder.get(number)
 
-    const positions = await getPositions(demand)
+    const positions = await getPositions('customerorder', order)
     totalPositions += positions.length
 
     if (positions.length === 0) {
@@ -282,7 +348,7 @@ export async function buildReport(
       const a = pos.assortment || {}
       const image = downloadImages ? await downloadImage(a, imgCache) : null
       records.push({
-        Ячейка: await extractCell(demand, pos, slotCache),
+        Ячейка: cellMap?.get(assortmentId(pos)) || '',
         Товар: a.name || '',
         Артикул: a.article || '',
         Штрихкод: extractBarcodes4(a).join('\n'),
@@ -309,7 +375,7 @@ export async function buildReport(
     endStr,
     records,
     stats: {
-      demands: demands.length,
+      demands: orders.length,
       positions: totalPositions,
       rows: records.length,
       revenue: Math.round(revenueKopecks / 100)

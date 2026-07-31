@@ -20,6 +20,31 @@ function toDataUri(buf: Buffer): string {
   return `data:${isPng ? 'image/png' : 'image/jpeg'};base64,${buf.toString('base64')}`
 }
 
+/** Параллельный map с ограничением конкурентности и общим бюджетом времени. */
+async function mapPool<T>(
+  items: T[],
+  limit: number,
+  fn: (t: T) => Promise<string>,
+  budgetMs: number
+): Promise<Map<T, string>> {
+  const out = new Map<T, string>()
+  const deadline = Date.now() + budgetMs
+  let idx = 0
+  async function worker(): Promise<void> {
+    while (idx < items.length && Date.now() < deadline) {
+      const item = items[idx++]
+      try {
+        out.set(item, await fn(item))
+      } catch {
+        /* пропускаем — останется без стикера */
+      }
+    }
+  }
+  const n = Math.min(limit, items.length)
+  await Promise.all(Array.from({ length: n }, () => worker()))
+  return out
+}
+
 export interface GenerateSummary {
   window: { start: string; end: string }
   filename: string
@@ -51,8 +76,10 @@ export async function generateAndStore(
         .filter((u) => u.startsWith(LABEL_HOST))
     )
   )
-  const stickers = new Map<string, string>()
-  for (const u of labelUrls) stickers.set(u, await fetchStickerNumber(u))
+  // Этикетки MPsklad генерятся ~4–5 c каждая — качаем параллельно с общим
+  // бюджетом времени, чтобы не упереться в лимит функции Vercel. Не успевшие
+  // за бюджет останутся без номера стикера (отчёт всё равно сформируется).
+  const stickers = await mapPool(labelUrls, 12, fetchStickerNumber, 50000)
   for (const rec of report.records) {
     rec['Стикер'] = stickers.get(String(rec['Ссылка на этикетку'] || '').trim()) || ''
   }

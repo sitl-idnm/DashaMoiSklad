@@ -17,9 +17,9 @@ export function parseStickerNumber(text: string): string {
 
 /** Скачать PDF-этикетку и вытащить номер стикера. До 2 попыток; ошибки → ''. */
 export async function fetchStickerNumber(url: string): Promise<string> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const res = await fetch(url, { cache: 'no-store' })
+      const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
       if (!res.ok) continue
       const buf = Buffer.from(await res.arrayBuffer())
       const parser = new PDFParse({ data: buf })

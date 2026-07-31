@@ -67,12 +67,28 @@ export default function Panel() {
     })
   }
 
+  async function jfetch(url: string, init?: RequestInit) {
+    const r = await fetch(url, init)
+    const text = await r.text()
+    let data: any = null
+    try {
+      data = text ? JSON.parse(text) : null
+    } catch {
+      const snippet = text.replace(/\s+/g, ' ').slice(0, 140)
+      throw new Error(
+        `сервер вернул не JSON (HTTP ${r.status})` +
+          (r.status === 504 ? ' — функция не успела за отведённое время' : '') +
+          (snippet ? `: ${snippet}` : '')
+      )
+    }
+    return { ok: r.ok, status: r.status, data }
+  }
+
   async function loadSheets() {
     setLoading(true)
     setErr('')
     try {
-      const r = await fetch('/api/sheets', { cache: 'no-store' })
-      const d = await r.json()
+      const { data: d } = await jfetch('/api/sheets', { cache: 'no-store' })
       setConfigured(d.configured)
       setWin(d.window)
       setSheets(d.sheets || [])
