@@ -144,6 +144,17 @@ export default function Panel() {
     }
   }
 
+  // Пресет: с предыдущего дня 13:00 до текущего момента (московское время у
+  // пользователя = локальное, как и ручной ввод).
+  function applyPresetPrevDay() {
+    const now = new Date()
+    const start = new Date(now)
+    start.setDate(start.getDate() - 1)
+    start.setHours(13, 0, 0, 0)
+    setRangeStart(toDatetimeLocal(start))
+    setRangeEnd(toDatetimeLocal(now))
+  }
+
   async function logout() {
     await fetch('/api/logout', { method: 'POST' })
     window.location.href = '/login'
@@ -302,6 +313,12 @@ export default function Panel() {
               <div className="range-head">
                 <IconCalendar />
                 <span>Собрать за произвольный период</span>
+              </div>
+              <div className="range-presets">
+                <span className="range-presets-label">Быстро:</span>
+                <button type="button" className="preset" onClick={applyPresetPrevDay}>
+                  Пред. день 13:00 → сейчас
+                </button>
               </div>
               <div className="range-row">
                 <label className="range-field">
@@ -573,6 +590,11 @@ function CountUp({ value, duration = 800 }: { value: number; duration?: number }
   return <>{n}</>
 }
 /** datetime-local ("2026-07-01T13:00") -> формат бэкенда "2026-07-01 13:00:00". */
+/** Date → строка для input[type=datetime-local] ("YYYY-MM-DDTHH:MM"). */
+function toDatetimeLocal(d: Date) {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
 function toBackendDate(v: string) {
   if (!v) return ''
   const [date, time = '00:00'] = v.split('T')
