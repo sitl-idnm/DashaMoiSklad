@@ -106,9 +106,8 @@ export default function Panel() {
     setGen(true)
     setErr('')
     try {
-      const r = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-      const d = await r.json()
-      if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`)
+      const { ok, status, data: d } = await jfetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      if (!ok || !d?.ok) throw new Error(d?.error || `HTTP ${status}`)
       await loadSheets()
     } catch (e: any) {
       setErr('Ошибка генерации: ' + String(e?.message || e))
@@ -125,7 +124,7 @@ export default function Panel() {
     setGenR(true)
     setErr('')
     try {
-      const r = await fetch('/api/generate', {
+      const { ok, status, data: d } = await jfetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -135,8 +134,7 @@ export default function Panel() {
           manual: true
         })
       })
-      const d = await r.json()
-      if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`)
+      if (!ok || !d?.ok) throw new Error(d?.error || `HTTP ${status}`)
       setTab('manual')
       await loadSheets()
     } catch (e: any) {

@@ -65,7 +65,12 @@ export async function generateAndStore(
     endStr = w.endStr
   }
 
-  const report = await buildReport(startStr, endStr, downloadImages)
+  // Глобальный бюджет генерации: функция Vercel живёт ~60 c — оставляем запас
+  // на загрузку в Supabase. Фото и стикеры сверх бюджета не тянем (вернём
+  // отчёт с частичным обогащением, но без 504).
+  const deadline = Date.now() + 50_000
+
+  const report = await buildReport(startStr, endStr, downloadImages, deadline)
 
   // Номер WB-стикера из PDF-этикетки (одна этикетка на заказ — тянем по разу),
   // вешаем на записи ДО сборки XLSX, чтобы он попал и в файл, и в данные UI.
@@ -79,7 +84,8 @@ export async function generateAndStore(
   // Этикетки MPsklad генерятся ~4–5 c каждая — качаем параллельно с общим
   // бюджетом времени, чтобы не упереться в лимит функции Vercel. Не успевшие
   // за бюджет останутся без номера стикера (отчёт всё равно сформируется).
-  const stickers = await mapPool(labelUrls, 12, fetchStickerNumber, 50000)
+  const stickerBudget = Math.max(3000, deadline - Date.now())
+  const stickers = await mapPool(labelUrls, 12, fetchStickerNumber, stickerBudget)
   for (const rec of report.records) {
     rec['Стикер'] = stickers.get(String(rec['Ссылка на этикетку'] || '').trim()) || ''
   }

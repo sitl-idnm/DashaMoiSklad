@@ -45,10 +45,28 @@ export interface SheetRow {
   created_at: string
 }
 
+/** fetch с ретраем на сетевые сбои (socket hang up / fetch failed / timeout). */
+async function fetchRetry(
+  url: string,
+  init: RequestInit,
+  attempts = 3
+): Promise<globalThis.Response> {
+  let lastErr: unknown
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fetch(url, { ...init, signal: AbortSignal.timeout(30000) })
+    } catch (e) {
+      lastErr = e
+      await new Promise((r) => setTimeout(r, 400 * (i + 1)))
+    }
+  }
+  throw lastErr
+}
+
 /** Загрузка XLSX в приватный бакет (service-role, upsert). */
 export async function uploadXlsx(path: string, buffer: Buffer): Promise<void> {
   const key = serviceKey()
-  const res = await fetch(`${base()}/storage/v1/object/${BUCKET}/${path}`, {
+  const res = await fetchRetry(`${base()}/storage/v1/object/${BUCKET}/${path}`, {
     method: 'POST',
     headers: {
       apikey: key,
@@ -69,7 +87,7 @@ export async function uploadXlsx(path: string, buffer: Buffer): Promise<void> {
 /** Upsert строки метаданных отчёта по окну (service-role, обходит RLS). */
 export async function insertSheet(row: Omit<SheetRow, 'id' | 'created_at'>): Promise<void> {
   const key = serviceKey()
-  const res = await fetch(
+  const res = await fetchRetry(
     `${base()}/rest/v1/${TABLE}?on_conflict=window_start,window_end`,
     {
       method: 'POST',
@@ -92,7 +110,7 @@ export async function insertSheet(row: Omit<SheetRow, 'id' | 'created_at'>): Pro
 /** Список готовых листов, свежие сверху (anon, публичный SELECT по RLS). */
 export async function listSheets(limit = 60): Promise<SheetRow[]> {
   const key = anonKey()
-  const res = await fetch(
+  const res = await fetchRetry(
     `${base()}/rest/v1/${TABLE}?select=*&order=window_start.desc&limit=${limit}`,
     { headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: 'no-store' }
   )
@@ -105,7 +123,7 @@ export async function getAuthUser(
   username: string
 ): Promise<{ salt: string; password_hash: string } | null> {
   const key = serviceKey()
-  const res = await fetch(
+  const res = await fetchRetry(
     `${base()}/rest/v1/moi_sklad_auth?select=salt,password_hash&username=eq.${encodeURIComponent(username)}&limit=1`,
     { headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: 'no-store' }
   )
@@ -117,7 +135,7 @@ export async function getAuthUser(
 /** Подписанная ссылка на скачивание файла из приватного бакета (service-role). */
 export async function signedUrl(path: string, expiresIn = 3600): Promise<string> {
   const key = serviceKey()
-  const res = await fetch(`${base()}/storage/v1/object/sign/${BUCKET}/${path}`, {
+  const res = await fetchRetry(`${base()}/storage/v1/object/sign/${BUCKET}/${path}`, {
     method: 'POST',
     headers: {
       apikey: key,

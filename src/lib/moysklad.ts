@@ -278,7 +278,8 @@ function cellSortKey(cell: string): [number, number] {
 export async function buildReport(
   startStr?: string,
   endStr?: string,
-  downloadImages = true
+  downloadImages = true,
+  deadlineMs?: number
 ): Promise<ReportResult> {
   if (!startStr || !endStr) {
     const w = computeWindow()
@@ -346,7 +347,10 @@ export async function buildReport(
 
     for (const pos of positions) {
       const a = pos.assortment || {}
-      const image = downloadImages ? await downloadImage(a, imgCache) : null
+      const image =
+        downloadImages && (!deadlineMs || Date.now() < deadlineMs)
+          ? await downloadImage(a, imgCache)
+          : null
       records.push({
         Ячейка: cellMap?.get(assortmentId(pos)) || '',
         Товар: a.name || '',
