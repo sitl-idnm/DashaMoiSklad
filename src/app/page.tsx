@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, type CSSProperties } from 'react'
+import { DateTimeWheel } from './DateTimeWheel'
 
 type DataRow = { [column: string]: string | number }
 interface Sheet {
@@ -321,14 +322,14 @@ export default function Panel() {
                 </button>
               </div>
               <div className="range-row">
-                <label className="range-field">
+                <div className="range-field">
                   <span>Начало</span>
-                  <input type="datetime-local" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} />
-                </label>
-                <label className="range-field">
+                  <DateTimeWheel value={rangeStart} onChange={setRangeStart} />
+                </div>
+                <div className="range-field">
                   <span>Конец</span>
-                  <input type="datetime-local" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} />
-                </label>
+                  <DateTimeWheel value={rangeEnd} onChange={setRangeEnd} />
+                </div>
                 <label className="checkbox">
                   <input type="checkbox" checked={rangeImages} onChange={(e) => setRangeImages(e.target.checked)} />
                   с фото
