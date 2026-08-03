@@ -58,6 +58,7 @@ export default function Panel() {
   const [genR, setGenR] = useState(false)
   const [tab, setTab] = useState<'auto' | 'manual'>('auto')
   const [showEmpty, setShowEmpty] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   function toggle(id: number) {
     setExpanded((prev) => {
@@ -203,24 +204,27 @@ export default function Panel() {
 
   return (
     <div className="app">
-      <aside className="sidebar">
-        <div>
+      <aside className={`sidebar${menuOpen ? ' open' : ''}`}>
+        <div className="sidebar-head">
           <div className="brand">
             <span className="title">Панель инструментов</span>
             <span className="sub">внутренние утилиты</span>
           </div>
-          <nav>
-            <button className={`nav-item ${cat === 'all' ? 'active' : ''}`} onClick={() => { setCat('all'); back() }}>
-              <IconGrid /><span>Все инструменты</span>
-            </button>
-            <button className={`nav-item ${cat === 'sklad' ? 'active' : ''}`} onClick={() => { setCat('sklad'); back() }}>
-              <IconWarehouse /><span>Мой склад</span>
-            </button>
-            <button className={`nav-item ${cat === 'reports' ? 'active' : ''}`} onClick={() => { setCat('reports'); back() }}>
-              <IconDoc /><span>Отчёты</span>
-            </button>
-          </nav>
+          <button className="hamburger" onClick={() => setMenuOpen((v) => !v)} aria-label="Меню">
+            <IconMenu open={menuOpen} />
+          </button>
         </div>
+        <nav>
+          <button className={`nav-item ${cat === 'all' ? 'active' : ''}`} onClick={() => { setCat('all'); back(); setMenuOpen(false) }}>
+            <IconGrid /><span>Все инструменты</span>
+          </button>
+          <button className={`nav-item ${cat === 'sklad' ? 'active' : ''}`} onClick={() => { setCat('sklad'); back(); setMenuOpen(false) }}>
+            <IconWarehouse /><span>Мой склад</span>
+          </button>
+          <button className={`nav-item ${cat === 'reports' ? 'active' : ''}`} onClick={() => { setCat('reports'); back(); setMenuOpen(false) }}>
+            <IconDoc /><span>Отчёты</span>
+          </button>
+        </nav>
         <div className="profile">
           <span className="avatar">СГ</span>
           <div style={{ minWidth: 0, flex: 1 }}>
@@ -614,6 +618,13 @@ function formatCell(col: string, value: string | number | undefined) {
 function IconChevron() { return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polyline points="6,9 12,15 18,9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>) }
 function IconCalendar() { return (<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.6" /><line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" strokeWidth="1.6" /><line x1="8" y1="3" x2="8" y2="6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><line x1="16" y1="3" x2="16" y2="6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>) }
 function IconChart({ s = 18 }: { s?: number }) { return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M4 20V4M4 20h16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><rect x="7" y="12" width="3" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" /><rect x="12.5" y="8" width="3" height="9" rx="1" stroke="currentColor" strokeWidth="1.5" /><rect x="18" y="14" width="3" height="3" rx="1" stroke="currentColor" strokeWidth="1.5" /></svg>) }
+function IconMenu({ open }: { open?: boolean }) {
+  return open ? (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+  ) : (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><line x1="4" y1="7" x2="20" y2="7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><line x1="4" y1="17" x2="20" y2="17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+  )
+}
 function IconGrid() { return (<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" /><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" /><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" /><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" /></svg>) }
 function IconWarehouse({ s = 18 }: { s?: number }) { return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M3 9l9-5 9 5v10a1 1 0 01-1 1H4a1 1 0 01-1-1z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /><path d="M8 20v-6h8v6" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>) }
 function IconDoc({ s = 18 }: { s?: number }) { return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v14H6z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /><line x1="9" y1="12" x2="16" y2="12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /><line x1="9" y1="16" x2="16" y2="16" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>) }

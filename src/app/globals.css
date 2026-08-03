@@ -1,9 +1,9 @@
 :root{
   --ink:#16181B; --page:#FAFAFA; --tonal:#F5F5F6; --stroke:#E4E4E7; --row:#F0F0F2;
   /* Винно-серая палитра */
-  --wine:#7C2438; --wine-2:#9A3A54;
-  --wine-grad:linear-gradient(256deg,#7C2438,#9A3A54);
-  --wine-soft:rgba(124,36,56,0.08);
+  --wine:#385429; --wine-2:#4C7238;
+  --wine-grad:linear-gradient(256deg,#385429,#4C7238);
+  --wine-soft:rgba(56,84,41,0.10);
   --sidebar:#242329;
   --shadow-card:0 4px 24px rgba(0,0,0,.06);
   --ok:#0a7a45; --ok-soft:rgba(0,150,80,.08);
@@ -20,8 +20,12 @@ a:hover{color:var(--wine-2)}
 
 /* Сайдбар — закреплён, всегда виден при скролле */
 .sidebar{width:264px;flex-shrink:0;background:var(--sidebar);color:#fff;
-  display:flex;flex-direction:column;justify-content:space-between;padding:28px 20px;
+  display:flex;flex-direction:column;justify-content:flex-start;padding:28px 20px;
   position:sticky;top:0;height:100vh;align-self:flex-start;overflow-y:auto}
+.sidebar-head{display:flex;align-items:center;justify-content:space-between}
+.hamburger{display:none;background:none;border:none;color:#fff;cursor:pointer;padding:6px;
+  align-items:center;justify-content:center;border-radius:8px}
+.hamburger:hover{background:rgba(255,255,255,.08)}
 .brand{display:flex;flex-direction:column;gap:2px;padding:0 8px;margin-bottom:36px}
 .brand .title{font-family:var(--font-inter);font-weight:600;font-size:16px;letter-spacing:.01em}
 .brand .sub{font-size:12px;color:rgba(255,255,255,.4)}
@@ -31,7 +35,7 @@ nav{display:flex;flex-direction:column;gap:4px}
 .nav-item:hover{color:rgba(255,255,255,.85)}
 .nav-item.active{background:var(--wine-grad);color:#fff}
 .nav-item span{font-family:var(--font-inter);font-weight:500;font-size:14px}
-.profile{display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;background:rgba(255,255,255,.06)}
+.profile{display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;background:rgba(255,255,255,.06);margin-top:auto}
 .avatar{width:34px;height:34px;border-radius:50%;background:var(--wine-grad);flex-shrink:0;
   display:flex;align-items:center;justify-content:center;font-family:var(--font-inter);font-weight:600;font-size:13px;color:#fff}
 .profile .name{font-family:var(--font-inter);font-weight:500;font-size:13px;color:#fff}
@@ -144,7 +148,7 @@ tbody tr:hover{background:#FBFAFB}
 .range-presets-label{font-size:13px;color:rgba(22,24,27,.5)}
 .preset{font-family:var(--font-inter);font-weight:500;font-size:13px;color:var(--wine);
   background:var(--wine-soft);border:none;border-radius:8px;padding:8px 13px;cursor:pointer;transition:background .2s}
-.preset:hover{background:rgba(124,36,56,.14)}
+.preset:hover{background:rgba(56,84,41,.18)}
 
 /* Колёсики выбора даты/времени (iOS-style) */
 .wheel-panel{position:relative;background:#fff;box-shadow:inset 0 0 0 1px var(--stroke);
@@ -170,18 +174,16 @@ tbody tr:hover{background:#FBFAFB}
 /* ---------- Мобильный адаптив ---------- */
 @media (max-width: 820px){
   .app{flex-direction:column}
-  .sidebar{width:100%;flex-direction:row;align-items:center;justify-content:space-between;
-    gap:12px;padding:10px 14px;position:sticky;top:0;z-index:20}
-  .sidebar > div:first-child{display:flex;flex-direction:row;align-items:center;gap:14px;flex:1;min-width:0}
-  .brand{margin-bottom:0;flex-shrink:0}
-  .brand .title{font-size:14px}
+  .sidebar{width:100%;height:auto;position:relative;top:auto;padding:0;overflow:visible}
+  .sidebar-head{padding:12px 16px}
+  .hamburger{display:flex}
+  .brand{margin-bottom:0}
+  .brand .title{font-size:15px}
   .brand .sub{display:none}
-  nav{flex-direction:row;gap:6px;overflow-x:auto;flex:1;-ms-overflow-style:none;scrollbar-width:none}
-  nav::-webkit-scrollbar{display:none}
-  .nav-item{padding:8px 12px;white-space:nowrap}
-  .nav-item span{font-size:13px}
-  .profile{padding:6px;gap:6px;background:transparent;flex-shrink:0}
-  .profile .name,.profile .role{display:none}
+  nav{display:none;padding:6px 12px 12px}
+  .profile{display:none;margin:0 12px 12px}
+  .sidebar.open nav{display:flex}
+  .sidebar.open .profile{display:flex}
 
   main{padding:20px 16px 48px}
   .topbar{flex-wrap:wrap;gap:12px;margin-bottom:20px}
