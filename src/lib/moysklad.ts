@@ -5,7 +5,7 @@
 
 const BASE = 'https://api.moysklad.ru/api/remap/1.2'
 const ETIKETKA_ATTR = 'Этикетка MPsklad'
-const WINDOW_HOUR = 13
+const WINDOW_HOUR = 11
 const MSK_OFFSET_MS = 3 * 60 * 60 * 1000 // Москва = UTC+3, без перехода на летнее время
 
 export const COLUMNS = [

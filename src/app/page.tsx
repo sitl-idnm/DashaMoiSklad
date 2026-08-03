@@ -146,13 +146,13 @@ export default function Panel() {
     }
   }
 
-  // Пресет: с предыдущего дня 13:00 до текущего момента (московское время у
+  // Пресет: с предыдущего дня 11:00 до текущего момента (московское время у
   // пользователя = локальное, как и ручной ввод).
   function applyPresetPrevDay() {
     const now = new Date()
     const start = new Date(now)
     start.setDate(start.getDate() - 1)
-    start.setHours(13, 0, 0, 0)
+    start.setHours(11, 0, 0, 0)
     setRangeStart(toDatetimeLocal(start))
     setRangeEnd(toDatetimeLocal(now))
   }
@@ -263,7 +263,7 @@ export default function Panel() {
                 <div className="grid">
                   <div className="card clickable" onClick={openTool}>
                     <h3>Лист сборки</h3>
-                    <p>Отгрузки за сутки (13:00–13:00): ячейка, товар, артикул, штрихкод, клиент, ссылка на этикетку и фото. Готовый XLSX.</p>
+                    <p>Отгрузки за сутки (11:00–11:00): ячейка, товар, артикул, штрихкод, клиент, ссылка на этикетку и фото. Готовый XLSX.</p>
                     <div className="card-foot"><span className="chip ready">готово</span><span className="open-link">Открыть →</span></div>
                   </div>
                   <div className="card">
@@ -305,7 +305,7 @@ export default function Panel() {
           <div className="tool">
             <div>
               <h1>Лист сборки</h1>
-              <p className="sub">Отчёт формируется автоматически каждый день в 11:00 (за прошедшие сутки 13:00–13:00). Здесь можно скачать готовые листы или собрать вручную за текущее окно.</p>
+              <p className="sub">Отчёт формируется автоматически каждый день в 11:05 (за прошедшие сутки 11:00–11:00). Здесь можно скачать готовые листы или собрать вручную за текущее окно.</p>
             </div>
 
             <div className="controls">
@@ -325,7 +325,7 @@ export default function Panel() {
               <div className="range-presets">
                 <span className="range-presets-label">Быстро:</span>
                 <button type="button" className="preset" onClick={applyPresetPrevDay}>
-                  Пред. день 13:00 → сейчас
+                  Пред. день 11:00 → сейчас
                 </button>
               </div>
               <div className="range-row">
@@ -357,7 +357,7 @@ export default function Panel() {
               <div className="stat"><div className="num"><CountUp value={visible.length} /></div><div className="cap">{tab === 'auto' ? 'дней с отгрузками' : 'ручных отчётов'}</div></div>
               <div className="stat"><div className="num"><CountUp value={inTab[0]?.demands ?? 0} /></div><div className="cap">отгрузок (последний)</div></div>
               <div className="stat"><div className="num"><CountUp value={total} /></div><div className="cap">строк всего</div></div>
-              <div className="stat dark"><div className="num">13:00</div><div className="cap">граница суток</div></div>
+              <div className="stat dark"><div className="num">11:00</div><div className="cap">граница суток</div></div>
             </div>
 
             <div className="list-bar">
