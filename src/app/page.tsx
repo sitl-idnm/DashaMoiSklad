@@ -214,28 +214,31 @@ export default function Panel() {
             <IconMenu open={menuOpen} />
           </button>
         </div>
-        <nav>
-          <button className={`nav-item ${cat === 'all' ? 'active' : ''}`} onClick={() => { setCat('all'); back(); setMenuOpen(false) }}>
-            <IconGrid /><span>Все инструменты</span>
-          </button>
-          <button className={`nav-item ${cat === 'sklad' ? 'active' : ''}`} onClick={() => { setCat('sklad'); back(); setMenuOpen(false) }}>
-            <IconWarehouse /><span>Мой склад</span>
-          </button>
-          <button className={`nav-item ${cat === 'reports' ? 'active' : ''}`} onClick={() => { setCat('reports'); back(); setMenuOpen(false) }}>
-            <IconDoc /><span>Отчёты</span>
-          </button>
-        </nav>
-        <div className="profile">
-          <span className="avatar">СГ</span>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div className="name">City Group</div>
-            <div className="role">оператор склада</div>
+        <div className="drawer">
+          <nav>
+            <button className={`nav-item ${cat === 'all' ? 'active' : ''}`} onClick={() => { setCat('all'); back(); setMenuOpen(false) }}>
+              <IconGrid /><span>Все инструменты</span>
+            </button>
+            <button className={`nav-item ${cat === 'sklad' ? 'active' : ''}`} onClick={() => { setCat('sklad'); back(); setMenuOpen(false) }}>
+              <IconWarehouse /><span>Мой склад</span>
+            </button>
+            <button className={`nav-item ${cat === 'reports' ? 'active' : ''}`} onClick={() => { setCat('reports'); back(); setMenuOpen(false) }}>
+              <IconDoc /><span>Отчёты</span>
+            </button>
+          </nav>
+          <div className="profile">
+            <span className="avatar">СГ</span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div className="name">City Group</div>
+              <div className="role">оператор склада</div>
+            </div>
+            <button className="logout" onClick={logout} title="Выйти" aria-label="Выйти">
+              <IconLogout />
+            </button>
           </div>
-          <button className="logout" onClick={logout} title="Выйти" aria-label="Выйти">
-            <IconLogout />
-          </button>
         </div>
       </aside>
+      {menuOpen && <div className="menu-backdrop" onClick={() => setMenuOpen(false)} />}
 
       <main>
         <div className="topbar">
@@ -302,7 +305,7 @@ export default function Panel() {
           <div className="tool">
             <div>
               <h1>Лист сборки</h1>
-              <p className="sub">Отчёт формируется автоматически каждый день в 13:05. Здесь можно скачать готовые листы или собрать вручную за текущее окно.</p>
+              <p className="sub">Отчёт формируется автоматически каждый день в 11:00 (за прошедшие сутки 13:00–13:00). Здесь можно скачать готовые листы или собрать вручную за текущее окно.</p>
             </div>
 
             <div className="controls">
