@@ -220,6 +220,39 @@ async function downloadImage(
   return buf
 }
 
+/**
+ * Параллельно скачивает фото и проставляет их в записи. Группирует по товару
+ * (одно фото на товар — качаем один раз, вешаем на все его строки), крутит пул
+ * из `concurrency` воркеров. За `deadlineMs` новые скачивания не стартуем —
+ * оставшиеся строки останутся без фото, но отчёт соберётся.
+ */
+async function attachImages(
+  targets: { rec: Record; assortment: any }[],
+  cache: Map<string, Buffer | null>,
+  concurrency: number,
+  deadlineMs?: number
+): Promise<void> {
+  const byPid = new Map<string, { assortment: any; recs: Record[] }>()
+  for (const t of targets) {
+    const pid = t.assortment?.id
+    if (!pid) continue
+    const g = byPid.get(pid)
+    if (g) g.recs.push(t.rec)
+    else byPid.set(pid, { assortment: t.assortment, recs: [t.rec] })
+  }
+  const jobs = Array.from(byPid.values())
+  let idx = 0
+  async function worker(): Promise<void> {
+    while (idx < jobs.length) {
+      if (deadlineMs && Date.now() >= deadlineMs) return
+      const job = jobs[idx++]
+      const buf = await downloadImage(job.assortment, cache)
+      for (const r of job.recs) r.image = buf
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, jobs.length) }, () => worker()))
+}
+
 // ---------------- Загрузка сущностей за окно ----------------
 async function fetchByWindow(
   entity: string,
@@ -322,6 +355,7 @@ export async function buildReport(
   }
 
   const records: Record[] = []
+  const imgTargets: { rec: Record; assortment: any }[] = []
   let totalPositions = 0
   let revenueKopecks = 0
 
@@ -347,11 +381,7 @@ export async function buildReport(
 
     for (const pos of positions) {
       const a = pos.assortment || {}
-      const image =
-        downloadImages && (!deadlineMs || Date.now() < deadlineMs)
-          ? await downloadImage(a, imgCache)
-          : null
-      records.push({
+      const rec: Record = {
         Ячейка: cellMap?.get(assortmentId(pos)) || '',
         Товар: a.name || '',
         Артикул: a.article || '',
@@ -361,9 +391,16 @@ export async function buildReport(
         '№ заказа': number,
         'Ссылка на этикетку': etiketka,
         'Дата заказа': orderDate,
-        image
-      })
+        image: null
+      }
+      records.push(rec)
+      if (downloadImages) imgTargets.push({ rec, assortment: a })
     }
+  }
+
+  // Фото — параллельным пулом (по товару, один раз) в пределах дедлайна.
+  if (downloadImages && imgTargets.length) {
+    await attachImages(imgTargets, imgCache, 8, deadlineMs)
   }
 
   records.sort((x, y) => {
