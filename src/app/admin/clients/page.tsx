@@ -165,9 +165,34 @@ function ClientCard({
 }) {
   const [creds, setCreds] = useState<Credential[]>([])
   const [tokens, setTokens] = useState<Record<string, string>>({})
+  const [genToken, setGenToken] = useState('')
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
   const [runs, setRuns] = useState<any[]>([])
+
+  // Один ключ на все категории (обычный случай: токен ВБ уже содержит нужные scope).
+  async function saveGeneral() {
+    const token = genToken.trim()
+    if (!token) return
+    setBusy('all')
+    setMsg('')
+    try {
+      const r = await fetch(`/api/admin/clients/${client.id}/credentials`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'all', token })
+      })
+      const d = await r.json()
+      if (!d.ok) throw new Error(d.error)
+      setCreds(d.credentials)
+      setGenToken('')
+      await verify()
+    } catch (e: any) {
+      setMsg(String(e?.message || e))
+    } finally {
+      setBusy('')
+    }
+  }
 
   async function saveOrg(orgId: string) {
     setBusy('org')
@@ -310,7 +335,35 @@ function ClientCard({
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* Обычный случай: один ключ ВБ на все категории (scope зашиты в токене). */}
+          <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 14 }}>Ключ ВБ</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
+            <input
+              type="password"
+              placeholder="Вставьте API-ключ кабинета (один на все категории)"
+              value={genToken}
+              onChange={(e) => setGenToken(e.target.value)}
+              style={{ ...inputStyle, flex: 1, minWidth: 260 }}
+            />
+            <button className="btn" disabled={busy === 'all' || !genToken.trim()} onClick={saveGeneral}>
+              {busy === 'all' ? 'Сохраняю…' : 'Сохранить и проверить'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, fontSize: 13 }}>
+            <span style={{ color: 'rgba(22,24,27,.5)' }}>Покрытие категорий:</span>
+            {SCOPES.map(({ key, label }) => (
+              <span key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <StatusDot cr={credByScope(key)} />
+                <span style={{ color: 'rgba(22,24,27,.6)' }}>{label}</span>
+              </span>
+            ))}
+          </div>
+
+          <details style={{ marginBottom: 4 }}>
+            <summary style={{ cursor: 'pointer', fontSize: 13, color: 'rgba(22,24,27,.55)' }}>
+              Дополнительно: отдельные ключи по категориям
+            </summary>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
             {SCOPES.map(({ key, label }) => {
               const cr = credByScope(key)
               return (
@@ -338,6 +391,7 @@ function ClientCard({
               )
             })}
           </div>
+          </details>
 
           <div style={{ display: 'flex', gap: 10, marginTop: 16, alignItems: 'center' }}>
             <button className="btn" disabled={busy === 'verify'} onClick={verify}>

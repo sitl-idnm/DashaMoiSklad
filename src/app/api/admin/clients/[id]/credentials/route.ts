@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import {
   listCredentials,
   setWbCredential,
+  setWbCredentialAll,
   deleteWbCredential,
   WB_SCOPES
 } from '@/lib/clients'
@@ -22,19 +23,20 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   }
 }
 
-/** Сохранить/заменить токен по scope. Body: { scope, token }. */
+/** Сохранить/заменить токен. Body: { scope, token }. scope='all' — один ключ на все категории. */
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
     const body = await req.json().catch(() => ({}))
     const scope = body?.scope
     const token = String(body?.token || '').trim()
-    if (!isScope(scope)) {
+    if (scope !== 'all' && !isScope(scope)) {
       return NextResponse.json({ ok: false, error: 'Неверный scope' }, { status: 400 })
     }
     if (!token) {
       return NextResponse.json({ ok: false, error: 'Пустой токен' }, { status: 400 })
     }
-    await setWbCredential(params.id, scope, token)
+    if (scope === 'all') await setWbCredentialAll(params.id, token)
+    else await setWbCredential(params.id, scope, token)
     return NextResponse.json({ ok: true, credentials: await listCredentials(params.id) })
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: String(e?.message || e) }, { status: 500 })

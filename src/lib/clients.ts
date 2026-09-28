@@ -128,6 +128,17 @@ export async function deleteWbCredential(clientId: string, scope: WbScope): Prom
   await query(`delete from wb_credentials where client_id = $1 and scope = $2`, [clientId, scope])
 }
 
+/**
+ * Один ключ ВБ на все категории. Современный токен ВБ (JWT) уже содержит набор
+ * разрешённых категорий в claim `s`, поэтому обычно достаточно одного ключа —
+ * пишем его во все scope. Какие категории реально покрыты, покажет «Проверить».
+ */
+export async function setWbCredentialAll(clientId: string, token: string): Promise<void> {
+  for (const scope of WB_SCOPES) {
+    await setWbCredential(clientId, scope, token)
+  }
+}
+
 /** Расшифрованный токен для синка. null — если не задан. */
 export async function getDecryptedToken(
   clientId: string,
