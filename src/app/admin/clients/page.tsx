@@ -284,6 +284,32 @@ function ClientCard({
             </div>
           )}
 
+          {/* Привязка к организации МойСклада — по ней «Лист сборки» находит
+              marketplace-ключ клиента и тянет «Стикер» прямо из кабинета ВБ. */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+            <div style={{ width: 130, fontWeight: 600, fontSize: 14 }}>Организация МС</div>
+            <select
+              value={client.moysklad_org_id || ''}
+              disabled={busy === 'org' || orgs.length === 0}
+              onChange={(e) => saveOrg(e.target.value)}
+              style={{ ...inputStyle, flex: 1, minWidth: 240 }}
+            >
+              <option value="">— не привязана (стикер по старому: PDF MPsklad) —</option>
+              {orgs.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                  {o.inn ? ` · ИНН ${o.inn}` : ''}
+                </option>
+              ))}
+            </select>
+            {busy === 'org' && <span style={{ fontSize: 13, color: 'rgba(22,24,27,.5)' }}>Сохраняю…</span>}
+          </div>
+          {orgsError && (
+            <div style={{ fontSize: 12, color: '#c0392b', marginBottom: 12 }}>
+              Организации МойСклада недоступны: {orgsError}
+            </div>
+          )}
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {SCOPES.map(({ key, label }) => {
               const cr = credByScope(key)
