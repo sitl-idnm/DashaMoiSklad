@@ -1,7 +1,9 @@
 import { buildReport, computeWindow } from './moysklad'
 import { buildXlsx } from './xlsx'
-import { uploadXlsx, insertSheet, type SheetDataRow } from './supabase'
+import { saveFile } from './storage'
+import { insertSheet, type SheetDataRow } from './sheets'
 import { fetchStickerNumber } from './sticker'
+import { marketplaceTokensByOrg, fetchWbStickers } from './wbSticker'
 
 const LABEL_HOST = 'https://app.mpsklad.ru/'
 
@@ -75,25 +77,51 @@ export async function generateAndStore(
 
   const report = await buildReport(startStr, endStr, downloadImages, imageDeadline)
 
-  // Номер WB-стикера из PDF-этикетки (одна этикетка на заказ — тянем по разу),
-  // вешаем на записи ДО сборки XLSX, чтобы он попал и в файл, и в данные UI.
+  // ── Стикер ──────────────────────────────────────────────────────────────
+  // 1) Сначала пробуем взять номер стикера ПРЯМО из кабинета ВБ: order.name из
+  //    МойСклада = WB order id, а marketplace-токен берём у клиента, чья
+  //    организация (moysklad_org_id) совпала. Это быстрее и не зависит от MPsklad.
+  const ordersByOrg = new Map<string, Set<number>>()
+  for (const rec of report.records) {
+    const orgId = rec._orgId
+    const orderId = Number(rec['№ заказа'])
+    if (!orgId || !Number.isFinite(orderId)) continue
+    let set = ordersByOrg.get(orgId)
+    if (!set) ordersByOrg.set(orgId, (set = new Set<number>()))
+    set.add(orderId)
+  }
+  let wbStickers = new Map<number, string>()
+  try {
+    const tokens = await marketplaceTokensByOrg()
+    if (tokens.size > 0) wbStickers = await fetchWbStickers(ordersByOrg, tokens)
+  } catch {
+    // Нет БД/ключей/связи — целиком уходим на старый способ ниже.
+  }
+
+  // 2) Для заказов без стикера из ВБ — СТАРЫЙ способ: номер из PDF-этикетки MPsklad
+  //    (нет доступа к кабинету, невалидный ключ, заказ уже отгружен и т.п.).
+  const needPdf = report.records.filter((r) => !wbStickers.has(Number(r['№ заказа'])))
   const labelUrls = Array.from(
     new Set(
-      report.records
+      needPdf
         .map((r) => String(r['Ссылка на этикетку'] || '').trim())
         .filter((u) => u.startsWith(LABEL_HOST))
     )
   )
   // Этикетки MPsklad генерятся ~4–5 c каждая — качаем параллельно с общим
-  // бюджетом времени, чтобы не упереться в лимит функции Vercel. Не успевшие
-  // за бюджет останутся без номера стикера (отчёт всё равно сформируется).
+  // бюджетом времени. Не успевшие за бюджет останутся без номера (отчёт соберётся).
   const stickerBudget = stickerDeadline - Date.now()
-  const stickers =
-    stickerBudget > 500
+  const pdfStickers =
+    stickerBudget > 500 && labelUrls.length
       ? await mapPool(labelUrls, 12, fetchStickerNumber, stickerBudget)
       : new Map<string, string>()
+
   for (const rec of report.records) {
-    rec['Стикер'] = stickers.get(String(rec['Ссылка на этикетку'] || '').trim()) || ''
+    const orderId = Number(rec['№ заказа'])
+    rec['Стикер'] =
+      wbStickers.get(orderId) ||
+      pdfStickers.get(String(rec['Ссылка на этикетку'] || '').trim()) ||
+      ''
   }
 
   const xlsx = await buildXlsx(report.records)
@@ -102,12 +130,13 @@ export async function generateAndStore(
   const storage_path = `sheets/${filename}`
 
   // Текстовые строки + миниатюра как data-URI (если есть) — для таблицы в UI.
-  const data: SheetDataRow[] = report.records.map(({ image, ...rest }) => ({
+  // _orgId — внутреннее поле маппинга, в UI/файл не пишем.
+  const data: SheetDataRow[] = report.records.map(({ image, _orgId, ...rest }) => ({
     ...rest,
     _img: image ? toDataUri(image) : ''
   }))
 
-  await uploadXlsx(storage_path, xlsx)
+  await saveFile(storage_path, xlsx)
   await insertSheet({
     window_start: toIso(startStr),
     window_end: toIso(endStr),

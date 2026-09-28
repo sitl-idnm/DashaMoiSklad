@@ -25,6 +25,8 @@ export interface Record {
   'Дата заказа': string
   'Стикер'?: string
   image: Buffer | null
+  /** id организации МойСклад (для маппинга на клиента/кабинет ВБ). Не идёт в XLSX/UI. */
+  _orgId?: string
 }
 
 export interface ReportResult {
@@ -363,6 +365,7 @@ export async function buildReport(
     revenueKopecks += Number(order.sum) || 0
     const number = String(order.name || '')
     const org = order.organization?.name || ''
+    const orgId = idFromHref(order.organization?.meta?.href)
     const etiketka = extractEtiketka(order)
     const orderDate = order.moment || ''
     const cellMap = cellByOrder.get(number)
@@ -374,7 +377,8 @@ export async function buildReport(
       records.push({
         Ячейка: '', Товар: '(позиции отсутствуют)', Артикул: '', Штрихкод: '',
         'Кол-во': '', Клиент: org, '№ заказа': number,
-        'Ссылка на этикетку': etiketka, 'Дата заказа': orderDate, image: null
+        'Ссылка на этикетку': etiketka, 'Дата заказа': orderDate, image: null,
+        _orgId: orgId
       })
       continue
     }
@@ -391,7 +395,8 @@ export async function buildReport(
         '№ заказа': number,
         'Ссылка на этикетку': etiketka,
         'Дата заказа': orderDate,
-        image: null
+        image: null,
+        _orgId: orgId
       }
       records.push(rec)
       if (downloadImages) imgTargets.push({ rec, assortment: a })

@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Self-host на VDS: минимальный сервер + node_modules в .next/standalone.
+  output: 'standalone',
   eslint: { ignoreDuringBuilds: true },
   // unpdf (serverless-сборка pdfjs) — грузим как внешний серверный пакет
   experimental: { serverComponentsExternalPackages: ['unpdf'] },

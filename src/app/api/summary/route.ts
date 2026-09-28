@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { listSheets, supabaseConfigured } from '@/lib/supabase'
+import { listSheets } from '@/lib/sheets'
+import { dbConfigured } from '@/lib/db'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -8,7 +9,7 @@ type Bar = { label: string; orders: number; units: number }
 
 /** Сводная статистика за последние 30 дней из сохранённых листов. */
 export async function GET() {
-  if (!supabaseConfigured()) {
+  if (!dbConfigured()) {
     return NextResponse.json({ configured: false })
   }
   try {

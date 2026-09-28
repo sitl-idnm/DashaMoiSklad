@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/supabase'
+import { getAuthUser } from '@/lib/authstore'
 import { createSessionToken, hashPassword, SESSION_COOKIE, SESSION_TTL_SEC } from '@/lib/auth'
 
 export const runtime = 'nodejs'
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'Неверный логин или пароль' }, { status: 401 })
     }
 
-    const token = await createSessionToken()
+    const token = await createSessionToken(username, user!.role || 'operator')
     const res = NextResponse.json({ ok: true })
     res.cookies.set(SESSION_COOKIE, token!, {
       httpOnly: true,

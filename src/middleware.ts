@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth'
+import { SESSION_COOKIE, parseSessionToken } from '@/lib/auth'
 
 // Пути, доступные без сессии.
-const PUBLIC = new Set(['/login', '/api/login', '/api/logout'])
+// /hw-test — автономная проверка сканера/принтера, без БД и секретов.
+const PUBLIC = new Set(['/login', '/api/login', '/api/logout', '/hw-test'])
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
@@ -18,8 +19,21 @@ export async function middleware(req: NextRequest) {
     if (secret && header === `Bearer ${secret}`) return NextResponse.next()
   }
 
-  const ok = await verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value)
-  if (ok) return NextResponse.next()
+  const session = await parseSessionToken(req.cookies.get(SESSION_COOKIE)?.value)
+  if (session) {
+    // Гейт админ-зоны: /admin/* и /api/admin/* — только для роли admin.
+    const isAdminArea =
+      pathname.startsWith('/admin') || pathname.startsWith('/api/admin')
+    if (isAdminArea && session.role !== 'admin') {
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+      }
+      const url = req.nextUrl.clone()
+      url.pathname = '/'
+      return NextResponse.redirect(url)
+    }
+    return NextResponse.next()
+  }
 
   if (pathname.startsWith('/api/')) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })

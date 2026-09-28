@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { DateTimeWheel } from './DateTimeWheel'
 
 type DataRow = { [column: string]: string | number }
@@ -12,7 +12,7 @@ interface Sheet {
   demands: number
   positions: number
   rows: number
-  data: DataRow[]
+  // data грузится лениво по /api/sheets/[id] при раскрытии дня (не в списке).
   source: 'auto' | 'manual'
   created_at: string
   url: string | null
@@ -225,6 +225,15 @@ export default function Panel() {
             <button className={`nav-item ${cat === 'reports' ? 'active' : ''}`} onClick={() => { setCat('reports'); back(); setMenuOpen(false) }}>
               <IconDoc /><span>Отчёты</span>
             </button>
+            <a className="nav-item" href="/assembly">
+              <IconDoc /><span>Лист сборки (ВБ)</span>
+            </a>
+            <a className="nav-item" href="/admin/clients">
+              <IconWarehouse /><span>Клиенты (ВБ)</span>
+            </a>
+            <a className="nav-item" href="/admin/groups">
+              <IconGrid /><span>Группы</span>
+            </a>
           </nav>
           <div className="profile">
             <span className="avatar">СГ</span>
@@ -349,7 +358,7 @@ export default function Panel() {
             </div>
 
             {!configured && (
-              <div className="error">Supabase не настроен: задайте SUPABASE_URL и SUPABASE_ANON_KEY в переменных окружения.</div>
+              <div className="error">База данных не настроена: задайте DATABASE_URL в переменных окружения.</div>
             )}
             {err && <div className="error">{err}</div>}
 
@@ -418,38 +427,7 @@ export default function Panel() {
                     </div>
                     {open && (
                       <div className="sheet-detail">
-                        {s.data && s.data.length > 0 ? (
-                          <div className="detail-scroll">
-                            <table className="detail-table">
-                              <thead>
-                                <tr>
-                                  <th className="th-img">фото</th>
-                                  {DATA_COLS.map((c) => <th key={c}>{c}</th>)}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {s.data.map((row, i) => (
-                                  <tr key={i}>
-                                    <td className="img-cell">
-                                      {row._img
-                                        ? <img src={String(row._img)} alt="" loading="lazy" />
-                                        : <span className="muted">—</span>}
-                                    </td>
-                                    {DATA_COLS.map((c) => (
-                                      <td key={c} className={c === 'Стикер' ? 'sticker-cell' : undefined}>
-                                        {c === 'Ссылка на этикетку' && row[c]
-                                          ? <a className="sticker-link" href={String(row[c])} target="_blank" rel="noreferrer">открыть ↗</a>
-                                          : formatCell(c, row[c])}
-                                      </td>
-                                    ))}
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : (
-                          <div className="muted" style={{ padding: '4px 2px' }}>Данных по строкам нет (пустое окно или лист собран без сохранения строк).</div>
-                        )}
+                        <SheetDetail id={s.id} rows={s.rows} />
                       </div>
                     )}
                   </div>
@@ -615,6 +593,118 @@ function formatCell(col: string, value: string | number | undefined) {
   const s = String(value)
   if (col === 'Ссылка на этикетку' && s.length > 40) return `${s.slice(0, 37)}…`
   return s
+}
+
+/**
+ * Строки листа за день. Данные грузятся лениво (при раскрытии), а таблица
+ * рисуется ОКНОМ: сначала N строк, дальше подгружаются по мере скролла, плюс
+ * content-visibility скрывает отрисовку строк вне вьюпорта. Это убирает лаг на
+ * больших днях (сотни строк с превью) — раньше всё рисовалось разом.
+ */
+const PAGE = 40
+// content-visibility не всегда есть в типах CSSProperties — прокидываем безопасно.
+const ROW_CV: CSSProperties = {
+  ['contentVisibility' as any]: 'auto',
+  ['containIntrinsicSize' as any]: '48px 1200px'
+}
+function SheetDetail({ id, rows }: { id: number; rows: number }) {
+  const [data, setData] = useState<DataRow[] | null>(null)
+  const [err, setErr] = useState('')
+  const [limit, setLimit] = useState(PAGE)
+  const sentinelRef = useRef<HTMLTableRowElement | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    setData(null)
+    setErr('')
+    setLimit(PAGE)
+    fetch(`/api/sheets/${id}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive) return
+        if (d.ok) setData(d.data || [])
+        else setErr(d.error || 'Не удалось загрузить строки')
+      })
+      .catch((e) => alive && setErr(String(e?.message || e)))
+    return () => {
+      alive = false
+    }
+  }, [id])
+
+  // Подгрузка следующего окна строк, когда «маяк» появляется во вьюпорте.
+  useEffect(() => {
+    if (!data || limit >= data.length) return
+    const el = sentinelRef.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) setLimit((l) => Math.min(l + PAGE, data.length))
+      },
+      { rootMargin: '300px' }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [data, limit])
+
+  if (err) return <div className="error">{err}</div>
+  if (!data) return <div className="muted" style={{ padding: '4px 2px' }}>Загрузка строк…</div>
+  if (data.length === 0)
+    return (
+      <div className="muted" style={{ padding: '4px 2px' }}>
+        Данных по строкам нет (пустое окно или лист собран без сохранения строк).
+      </div>
+    )
+
+  const shown = data.slice(0, limit)
+  return (
+    <div className="detail-scroll">
+      <table className="detail-table">
+        <thead>
+          <tr>
+            <th className="th-img">фото</th>
+            {DATA_COLS.map((c) => (
+              <th key={c}>{c}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {shown.map((row, i) => (
+            <tr key={i} style={ROW_CV}>
+              <td className="img-cell">
+                {row._img ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={String(row._img)} alt="" loading="lazy" decoding="async" />
+                ) : (
+                  <span className="muted">—</span>
+                )}
+              </td>
+              {DATA_COLS.map((c) => (
+                <td key={c} className={c === 'Стикер' ? 'sticker-cell' : undefined}>
+                  {c === 'Ссылка на этикетку' && row[c] ? (
+                    <a className="sticker-link" href={String(row[c])} target="_blank" rel="noreferrer">
+                      открыть ↗
+                    </a>
+                  ) : (
+                    formatCell(c, row[c])
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+          {limit < data.length && (
+            <tr ref={sentinelRef}>
+              <td
+                colSpan={DATA_COLS.length + 1}
+                style={{ textAlign: 'center', padding: 12, color: 'rgba(22,24,27,.5)' }}
+              >
+                Показано {limit} из {data.length} — прокрутите, чтобы увидеть ещё…
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
 }
 
 /* ---------- Иконки ---------- */

@@ -31,31 +31,71 @@ async function sign(data: string, key: string): Promise<string> {
   return toBase64Url(new Uint8Array(sig))
 }
 
-/** Создать подписанный токен сессии. Возвращает null, если секрет не задан. */
-export async function createSessionToken(): Promise<string | null> {
+export type Role = 'admin' | 'operator'
+export interface SessionPayload {
+  exp: number
+  username: string
+  role: Role
+}
+
+// username кодируем в base64url, чтобы точки/разделители не ломали формат токена.
+function encField(s: string): string {
+  return toBase64Url(new TextEncoder().encode(s))
+}
+function decField(s: string): string {
+  const pad = s.length % 4 === 0 ? '' : '='.repeat(4 - (s.length % 4))
+  const b64 = s.replace(/-/g, '+').replace(/_/g, '/') + pad
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return new TextDecoder().decode(bytes)
+}
+
+/**
+ * Создать подписанный токен сессии. Формат: "<exp>.<user_b64>.<role>.<sig>",
+ * где sig = HMAC(secret, "<exp>.<user_b64>.<role>"). Возвращает null без секрета.
+ */
+export async function createSessionToken(
+  username: string,
+  role: Role
+): Promise<string | null> {
   const key = secret()
   if (!key) return null
   const exp = Math.floor(Date.now() / 1000) + SESSION_TTL_SEC
-  const sig = await sign(String(exp), key)
-  return `${exp}.${sig}`
+  const data = `${exp}.${encField(username)}.${role}`
+  const sig = await sign(data, key)
+  return `${data}.${sig}`
+}
+
+/** Разобрать и проверить токен. Возвращает полезную нагрузку или null. */
+export async function parseSessionToken(
+  token: string | undefined
+): Promise<SessionPayload | null> {
+  const key = secret()
+  if (!key || !token) return null
+  const parts = token.split('.')
+  if (parts.length !== 4) return null
+  const [expStr, userB64, role, sig] = parts
+  const exp = Number(expStr)
+  if (!Number.isFinite(exp) || exp * 1000 < Date.now()) return null
+  if (role !== 'admin' && role !== 'operator') return null
+  const expected = await sign(`${expStr}.${userB64}.${role}`, key)
+  if (expected.length !== sig.length) return null
+  let diff = 0
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i)
+  if (diff !== 0) return null
+  let username = ''
+  try {
+    username = decField(userB64)
+  } catch {
+    return null
+  }
+  return { exp, username, role }
 }
 
 /** Проверить токен: подпись валидна и срок не истёк. */
 export async function verifySessionToken(token: string | undefined): Promise<boolean> {
-  const key = secret()
-  if (!key || !token) return false
-  const dot = token.indexOf('.')
-  if (dot < 0) return false
-  const expStr = token.slice(0, dot)
-  const sig = token.slice(dot + 1)
-  const exp = Number(expStr)
-  if (!Number.isFinite(exp) || exp * 1000 < Date.now()) return false
-  const expected = await sign(expStr, key)
-  // Сравнение постоянной длины.
-  if (expected.length !== sig.length) return false
-  let diff = 0
-  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i)
-  return diff === 0
+  return (await parseSessionToken(token)) !== null
 }
 
 /** SHA-256(salt + password) в hex — совпадает с тем, как хэш лежит в БД. */
