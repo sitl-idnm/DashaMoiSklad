@@ -13,6 +13,7 @@ export async function buildXlsx(records: Record[]): Promise<Buffer> {
     { header: 'Товар', width: 40 },
     { header: 'Фото', width: 14 },
     { header: 'Артикул', width: 24 },
+    { header: 'Размер', width: 12 },
     { header: 'Штрихкод', width: 18 },
     { header: 'Кол-во', width: 8 },
     { header: 'Клиент', width: 30 },
@@ -33,7 +34,7 @@ export async function buildXlsx(records: Record[]): Promise<Buffer> {
   records.forEach((rec, i) => {
     const rowNumber = i + 2 // 1 — шапка
     ws.addRow([
-      rec['Ячейка'], rec['Товар'], '', rec['Артикул'], rec['Штрихкод'],
+      rec['Ячейка'], rec['Товар'], '', rec['Артикул'], rec['Размер'], rec['Штрихкод'],
       rec['Кол-во'], rec['Клиент'], rec['№ заказа'], rec['Стикер'] ?? '',
       rec['Ссылка на этикетку'], rec['Дата заказа']
     ])

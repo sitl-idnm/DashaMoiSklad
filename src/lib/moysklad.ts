@@ -9,7 +9,7 @@ const WINDOW_HOUR = 11
 const MSK_OFFSET_MS = 3 * 60 * 60 * 1000 // Москва = UTC+3, без перехода на летнее время
 
 export const COLUMNS = [
-  'Ячейка', 'Товар', 'Фото', 'Артикул', 'Штрихкод', 'Кол-во',
+  'Ячейка', 'Товар', 'Фото', 'Артикул', 'Размер', 'Штрихкод', 'Кол-во',
   'Клиент', '№ заказа', 'Ссылка на этикетку', 'Дата заказа'
 ] as const
 
@@ -17,6 +17,7 @@ export interface Record {
   Ячейка: string
   Товар: string
   Артикул: string
+  Размер: string
   Штрихкод: string
   'Кол-во': number | string
   Клиент: string
@@ -183,6 +184,15 @@ const EXCLUDED_STATE_PREFIX = 'отмен'
 function isExcludedOrder(order: any): boolean {
   const name = (order.state?.name || '').trim().toLowerCase()
   return name.startsWith(EXCLUDED_STATE_PREFIX)
+}
+
+/**
+ * Размер из строки товара/артикула МойСклада. В артикуле он записан как
+ * «… р-р: 54 …» (или «р-р: onesize»). Возвращаем «р-р: 54» или '' если нет.
+ */
+function extractSize(text: string): string {
+  const m = String(text || '').match(/р-?р\.?:?\s*([^\s]+)/i)
+  return m ? `р-р: ${m[1]}` : ''
 }
 
 function extractEtiketka(order: any): string {
@@ -375,7 +385,7 @@ export async function buildReport(
 
     if (positions.length === 0) {
       records.push({
-        Ячейка: '', Товар: '(позиции отсутствуют)', Артикул: '', Штрихкод: '',
+        Ячейка: '', Товар: '(позиции отсутствуют)', Артикул: '', Размер: '', Штрихкод: '',
         'Кол-во': '', Клиент: org, '№ заказа': number,
         'Ссылка на этикетку': etiketka, 'Дата заказа': orderDate, image: null,
         _orgId: orgId
@@ -389,6 +399,7 @@ export async function buildReport(
         Ячейка: cellMap?.get(assortmentId(pos)) || '',
         Товар: a.name || '',
         Артикул: a.article || '',
+        Размер: extractSize(a.article || a.name || ''),
         Штрихкод: extractBarcodes4(a).join('\n'),
         'Кол-во': pos.quantity ?? 0,
         Клиент: org,

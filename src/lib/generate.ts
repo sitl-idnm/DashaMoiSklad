@@ -1,9 +1,10 @@
-import { buildReport, computeWindow } from './moysklad'
+import { buildReport, computeWindow, type Record as MsRecord } from './moysklad'
 import { buildXlsx } from './xlsx'
 import { saveFile } from './storage'
 import { insertSheet, type SheetDataRow } from './sheets'
 import { fetchStickerNumber } from './sticker'
 import { marketplaceTokensByOrg, fetchWbStickers } from './wbSticker'
+import { orgClientMap, photoUrlsByBarcode } from './wbProducts'
 
 const LABEL_HOST = 'https://app.mpsklad.ru/'
 
@@ -124,17 +125,59 @@ export async function generateAndStore(
       ''
   }
 
+  // ── Фото из кабинета ВБ ───────────────────────────────────────────────────
+  // В МойСкладе фото часто нет — подставляем URL с CDN ВБ по штрихкоду
+  // (из синхронизированных карточек клиента). Приоритет у ВБ; нет синка/совпадения
+  // → останется фото МойСклада (если есть) или пусто.
+  const splitBarcodes = (rec: MsRecord) =>
+    String(rec['Штрихкод'] || '')
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  const wbPhotoByRec = new Map<MsRecord, string>()
+  try {
+    const orgClients = await orgClientMap()
+    const barcodesByClient = new Map<string, Set<string>>()
+    for (const rec of report.records) {
+      const clientId = rec._orgId ? orgClients.get(rec._orgId) : undefined
+      if (!clientId) continue
+      let set = barcodesByClient.get(clientId)
+      if (!set) barcodesByClient.set(clientId, (set = new Set<string>()))
+      for (const b of splitBarcodes(rec)) set.add(b)
+    }
+    const photoMap = new Map<string, string>() // `${clientId}|${barcode}` → url
+    for (const [clientId, bset] of barcodesByClient) {
+      const m = await photoUrlsByBarcode(clientId, Array.from(bset))
+      for (const [bc, url] of m) photoMap.set(`${clientId}|${bc}`, url)
+    }
+    if (photoMap.size) {
+      for (const rec of report.records) {
+        const clientId = rec._orgId ? orgClients.get(rec._orgId) : undefined
+        if (!clientId) continue
+        for (const b of splitBarcodes(rec)) {
+          const url = photoMap.get(`${clientId}|${b}`)
+          if (url) {
+            wbPhotoByRec.set(rec, url)
+            break
+          }
+        }
+      }
+    }
+  } catch {
+    // Нет БД/синка товаров — фото возьмём из МойСклада (если есть) ниже.
+  }
+
   const xlsx = await buildXlsx(report.records)
 
   const filename = `assembly_sheet_${slug(startStr)}__${slug(endStr)}.xlsx`
   const storage_path = `sheets/${filename}`
 
-  // Текстовые строки + миниатюра как data-URI (если есть) — для таблицы в UI.
-  // _orgId — внутреннее поле маппинга, в UI/файл не пишем.
-  const data: SheetDataRow[] = report.records.map(({ image, _orgId, ...rest }) => ({
-    ...rest,
-    _img: image ? toDataUri(image) : ''
-  }))
+  // Текстовые строки + фото — для таблицы в UI. Приоритет: URL фото из кабинета
+  // ВБ, иначе миниатюра МойСклада (data-URI). _orgId — внутреннее, в UI/файл не пишем.
+  const data: SheetDataRow[] = report.records.map((rec) => {
+    const { image, _orgId, ...rest } = rec
+    return { ...rest, _img: wbPhotoByRec.get(rec) || (image ? toDataUri(image) : '') }
+  })
 
   await saveFile(storage_path, xlsx)
   await insertSheet({
