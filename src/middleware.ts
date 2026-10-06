@@ -11,9 +11,9 @@ export async function middleware(req: NextRequest) {
 
   if (PUBLIC.has(pathname)) return NextResponse.next()
 
-  // Cron бьёт GET /api/generate с Authorization: Bearer $CRON_SECRET — пропускаем его,
-  // авторизация запроса проверяется уже внутри самого роута.
-  if (pathname === '/api/generate' && req.method === 'GET') {
+  // Cron бьёт GET /api/generate и /api/orders/ship с Authorization: Bearer $CRON_SECRET —
+  // пропускаем, авторизация проверяется уже внутри самих роутов.
+  if ((pathname === '/api/generate' || pathname === '/api/orders/ship') && req.method === 'GET') {
     const secret = process.env.CRON_SECRET
     const header = req.headers.get('authorization')
     if (secret && header === `Bearer ${secret}`) return NextResponse.next()

@@ -50,6 +50,8 @@ services:
       CRON_SECRET: ${CRON_SECRET}
       CRON_HOUR_MSK: ${CRON_HOUR_MSK:-11}
       CRON_MIN_MSK: ${CRON_MIN_MSK:-5}
+      SHIP_HOUR_MSK: ${SHIP_HOUR_MSK:-11}
+      SHIP_MIN_MSK: ${SHIP_MIN_MSK:-2}
       TZ: Europe/Moscow
 
   nginx:

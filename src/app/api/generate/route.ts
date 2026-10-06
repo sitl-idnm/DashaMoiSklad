@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { generateAndStore } from '@/lib/generate'
-import { computeWindow } from '@/lib/moysklad'
+import { computeWindow, isAutoSkipDay } from '@/lib/moysklad'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -20,6 +20,11 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   if (!authorized(req, url)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
+  // Воскресенье — автосбор пропускаем. Заказы субботы+воскресенья соберёт
+  // понедельничный прогон (окно за 2 дня). Ручной запуск (POST) не ограничен.
+  if (isAutoSkipDay()) {
+    return NextResponse.json({ ok: true, skipped: true, reason: 'Воскресенье — автосбор пропущен' })
   }
   try {
     const summary = await generateAndStore()

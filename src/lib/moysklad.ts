@@ -112,19 +112,35 @@ function fmtWall(d: Date): string {
   )
 }
 
-/** Сутки [start, end) с границей WINDOW_HOUR:00 по Москве. Возвращает строки для фильтра. */
-export function computeWindow(now: Date = new Date()): {
-  startStr: string
-  endStr: string
-} {
+/** Верхняя граница окна — ближайшие прошедшие WINDOW_HOUR:00 по Москве. */
+function windowEnd(now: Date): Date {
   const wall = mskWall(now)
   const end = new Date(
     Date.UTC(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate(), WINDOW_HOUR, 0, 0)
   )
   if (wall < end) end.setUTCDate(end.getUTCDate() - 1)
+  return end
+}
+
+/**
+ * Окно [start, end) с границей WINDOW_HOUR:00 по Москве.
+ * Воскресенье не работаем: в ПОНЕДЕЛЬНИК собираем за 2 дня (сб 11:00 → пн 11:00),
+ * чтобы заказы субботы и воскресенья попали в один лист. Остальные дни — сутки.
+ */
+export function computeWindow(now: Date = new Date()): {
+  startStr: string
+  endStr: string
+} {
+  const end = windowEnd(now)
+  const daysBack = end.getUTCDay() === 1 ? 2 : 1 // 1 = понедельник (МСК-дата) → 2 дня
   const start = new Date(end)
-  start.setUTCDate(start.getUTCDate() - 1)
+  start.setUTCDate(start.getUTCDate() - daysBack)
   return { startStr: fmtWall(start), endStr: fmtWall(end) }
+}
+
+/** В воскресенье автосбор пропускаем (в этот день не отгружаем). */
+export function isAutoSkipDay(now: Date = new Date()): boolean {
+  return windowEnd(now).getUTCDay() === 0 // 0 = воскресенье (МСК-дата)
 }
 
 // ---------------- Ячейки склада ----------------
@@ -184,6 +200,13 @@ const EXCLUDED_STATE_PREFIX = 'отмен'
 function isExcludedOrder(order: any): boolean {
   const name = (order.state?.name || '').trim().toLowerCase()
   return name.startsWith(EXCLUDED_STATE_PREFIX)
+}
+
+// В лист сборки берём только заказы с контрагентом «ООО Вайлдберриз»
+// (защита от ручных/не-ВБ заказов). Имя нормализуем: регистр, кавычки, пробелы.
+export function isWbAgent(order: any): boolean {
+  const name = String(order.agent?.name || '').toLowerCase().replace(/["'«»\s]/g, '')
+  return name.includes('вайлдберриз')
 }
 
 /**
@@ -339,9 +362,9 @@ export async function buildReport(
       'customerorder',
       startStr,
       endStr,
-      'organization,positions.assortment,state'
+      'organization,positions.assortment,state,agent'
     )
-  ).filter((o) => !isExcludedOrder(o))
+  ).filter((o) => !isExcludedOrder(o) && isWbAgent(o))
 
   // Отгрузки от начала окна и до «сейчас» (без верхней границы) — только чтобы
   // взять ЯЧЕЙКУ (slot) по совпадению номера (demand.name == order.name).
