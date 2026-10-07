@@ -4,7 +4,8 @@ import { SESSION_COOKIE, parseSessionToken } from '@/lib/auth'
 
 // Пути, доступные без сессии.
 // /hw-test — автономная проверка сканера/принтера, без БД и секретов.
-const PUBLIC = new Set(['/login', '/api/login', '/api/logout', '/hw-test'])
+// /api/print/sheet — печатный лист для агента на локации (защищён секретом внутри).
+const PUBLIC = new Set(['/login', '/api/login', '/api/logout', '/hw-test', '/api/print/sheet'])
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl

@@ -79,6 +79,19 @@ export async function listSheetsMeta(limit = 60): Promise<SheetMeta[]> {
   )
 }
 
+/** Последний автособранный лист целиком (для авто-печати на локации). */
+export async function getLatestAutoSheet(): Promise<SheetRow | null> {
+  const rows = await query<SheetRow>(
+    `select id, window_start, window_end, filename, storage_path,
+            demands, positions, rows, revenue, data, source, created_at
+       from assembly_sheets
+      where source = 'auto'
+      order by window_start desc
+      limit 1`
+  )
+  return rows[0] ?? null
+}
+
 /** Данные (строки+превью) одного листа — грузятся по клику на день. */
 export async function getSheetData(id: number): Promise<SheetDataRow[] | null> {
   const row = await query<{ data: SheetDataRow[] }>(
