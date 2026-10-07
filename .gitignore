@@ -1,6 +1,7 @@
 # Секреты
 .env
 .env*.local
+print-agent/config.local.ps1
 
 # Node / Next
 node_modules/

@@ -18,6 +18,10 @@
 
 $ErrorActionPreference = 'Stop'
 
+# Локальная конфигурация (URL/секрет/папка) — лежит рядом со скриптом и в git НЕ коммитится.
+$cfg = Join-Path $PSScriptRoot 'config.local.ps1'
+if (Test-Path $cfg) { . $cfg }
+
 $AppUrl  = if ($env:MOISKLAD_URL)     { $env:MOISKLAD_URL }    else { 'https://aqua.kimprod.ru' }
 $Secret  = if ($env:MOISKLAD_SECRET)  { $env:MOISKLAD_SECRET } else { '' }
 $SaveDir = if ($env:MOISKLAD_SAVE_DIR){ $env:MOISKLAD_SAVE_DIR } else { Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Листы сборки' }
