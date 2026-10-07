@@ -92,6 +92,17 @@ export async function getLatestAutoSheet(): Promise<SheetRow | null> {
   return rows[0] ?? null
 }
 
+/** Полный лист по id (мета + данные). */
+export async function getSheetById(id: number): Promise<SheetRow | null> {
+  const rows = await query<SheetRow>(
+    `select id, window_start, window_end, filename, storage_path,
+            demands, positions, rows, revenue, data, source, created_at
+       from assembly_sheets where id = $1`,
+    [id]
+  )
+  return rows[0] ?? null
+}
+
 /** Данные (строки+превью) одного листа — грузятся по клику на день. */
 export async function getSheetData(id: number): Promise<SheetDataRow[] | null> {
   const row = await query<{ data: SheetDataRow[] }>(

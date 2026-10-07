@@ -1,14 +1,16 @@
-import { getLatestAutoSheet, getSheetData, type SheetDataRow } from '@/lib/sheets'
+import { getLatestAutoSheet, getSheetById, type SheetRow, type SheetDataRow } from '@/lib/sheets'
+import { readFile } from '@/lib/storage'
 import { dbConfigured } from '@/lib/db'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
- * Печатная HTML-версия листа сборки под A4 (альбомная). Для авто-печати на
- * локации: агент на ноуте рендерит её Edge-ом в PDF и шлёт на принтер.
- * Доступ по секрету (?secret=CRON_SECRET или Bearer) — страница публичная в middleware.
- * ?id=N — конкретный лист; без него — последний автособранный.
+ * Лист сборки по токену (для агента на локации: печать + сохранение на NAS).
+ *   ?secret=CRON_SECRET (или Bearer) — доступ (страница публичная в middleware).
+ *   ?id=N        — конкретный лист; без него — последний автособранный.
+ *   ?format=xlsx — отдать исходный XLSX-файл; иначе печатный HTML под A4.
+ * 204 — листа нет (напр. воскресенье пропущено) → агент ничего не делает.
  */
 function authorized(req: Request, url: URL): boolean {
   const expected = process.env.CRON_SECRET
@@ -19,8 +21,7 @@ function authorized(req: Request, url: URL): boolean {
 
 const esc = (v: unknown) =>
   String(v ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 const COLS = ['Ячейка', 'Товар', 'Артикул', 'Размер', 'Штрихкод', 'Кол-во', 'Клиент', '№ заказа', 'Стикер'] as const
 
@@ -32,39 +33,36 @@ function fmtWin(iso: string) {
 
 export async function GET(req: Request) {
   const url = new URL(req.url)
-  if (!authorized(req, url)) {
-    return new Response('unauthorized', { status: 401 })
-  }
+  if (!authorized(req, url)) return new Response('unauthorized', { status: 401 })
   if (!dbConfigured()) return new Response('db not configured', { status: 400 })
 
   const idParam = url.searchParams.get('id')
-  let sheet
-  let rows: SheetDataRow[] = []
-  if (idParam) {
-    const data = await getSheetData(Number(idParam))
-    if (data) rows = data
-  } else {
-    sheet = await getLatestAutoSheet()
-    if (sheet) rows = (sheet as any).data || []
+  const format = url.searchParams.get('format')
+  const sheet: SheetRow | null = idParam ? await getSheetById(Number(idParam)) : await getLatestAutoSheet()
+  if (!sheet) return new Response('', { status: 204 })
+
+  // Исходный XLSX-файл.
+  if (format === 'xlsx') {
+    const buf = await readFile(sheet.storage_path)
+    if (!buf) return new Response('file not found', { status: 404 })
+    return new Response(new Uint8Array(buf), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(sheet.filename)}"`,
+        'Cache-Control': 'no-store'
+      }
+    })
   }
 
-  if (!sheet && !idParam) {
-    // нет авто-листа (напр. воскресенье пропущено) — пусто, агент не печатает
-    return new Response('', { status: 204 })
-  }
-  if (rows.length === 0) {
-    return new Response('', { status: 204 })
-  }
+  // Печатный HTML под A4 (альбомная).
+  const rows: SheetDataRow[] = (sheet as any).data || []
+  if (rows.length === 0) return new Response('', { status: 204 })
 
-  const title = sheet
-    ? `Лист сборки · ${fmtWin(sheet.window_start)} → ${fmtWin(sheet.window_end)}`
-    : `Лист сборки · #${idParam}`
-
+  const title = `Лист сборки · ${fmtWin(sheet.window_start)} → ${fmtWin(sheet.window_end)}`
   const body = rows
     .map((r, i) => {
-      const img = r._img
-        ? `<img src="${esc(r._img)}" alt="">`
-        : '<span class="no">—</span>'
+      const img = r._img ? `<img src="${esc(r._img)}" alt="">` : '<span class="no">—</span>'
       const cells = COLS.map((c) => `<td class="${c === 'Товар' ? 'name' : ''}">${esc(r[c])}</td>`).join('')
       return `<tr><td class="n">${i + 1}</td><td class="img">${img}</td>${cells}</tr>`
     })
@@ -91,7 +89,7 @@ export async function GET(req: Request) {
 </style></head>
 <body>
   <h1>${esc(title)}</h1>
-  <div class="meta">Строк: ${rows.length}${sheet ? ` · отгрузок: ${sheet.demands} · позиций: ${sheet.positions}` : ''}</div>
+  <div class="meta">Строк: ${rows.length} · отгрузок: ${sheet.demands} · позиций: ${sheet.positions}</div>
   <table>
     <thead><tr><th>#</th><th>Фото</th>${COLS.map((c) => `<th>${c}</th>`).join('')}</tr></thead>
     <tbody>${body}</tbody>
