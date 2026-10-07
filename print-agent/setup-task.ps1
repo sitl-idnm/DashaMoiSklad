@@ -1,4 +1,4 @@
-<#
+﻿<#
   Разовая настройка на ноуте локации. Запусти ОТ ИМЕНИ АДМИНИСТРАТОРА:
     powershell -ExecutionPolicy Bypass -File setup-task.ps1
 
