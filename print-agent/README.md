@@ -36,16 +36,40 @@
    ```
    Должен выехать лист. Лог: `%LOCALAPPDATA%\moisklad-print\print.log`.
 
-6. **Планировщик задач** — ежедневно в 11:10 (МСК = локальное время ноута):
+6. **Планировщик задач** — ежедневно в 11:10 (МСК = локальное время ноута), с
+   «живучими» настройками (будит из сна, догоняет пропуск, не стопорится на батарее):
    ```powershell
-   $action  = New-ScheduledTaskAction -Execute 'powershell.exe' `
+   $action   = New-ScheduledTaskAction -Execute 'powershell.exe' `
      -Argument '-NoProfile -ExecutionPolicy Bypass -File "C:\moisklad-print\print-sheet.ps1"'
-   $trigger = New-ScheduledTaskTrigger -Daily -At 11:10
+   $trigger  = New-ScheduledTaskTrigger -Daily -At 11:10
+   $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun `
+     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+     -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
    Register-ScheduledTask -TaskName 'MoiSklad-PrintSheet' -Action $action -Trigger $trigger `
-     -Description 'Авто-печать листа сборки' -RunLevel Highest
+     -Settings $settings -RunLevel Highest -Description 'Авто-печать листа сборки'
    ```
-   Секрет и настройки можно прописать в саму задачу через `$env:` в `-Argument`,
-   либо задать их как системные переменные среды.
+   Задача регистрируется под текущим пользователем и идёт «только когда пользователь
+   вошёл» — это нужно, чтобы видеть принтер. Секрет/настройки — через системные
+   переменные среды или `$env:` в `-Argument`.
+
+## Сон, пароль, выключение — чтобы печать не срывалась
+- **Заблокированный экран (пароль после сна) печати НЕ мешает**: задача «только когда
+  вошёл» работает и в залокированной сессии. Пароль нужен только человеку, не задаче.
+- **Проще всего — не давать спать от сети** (экран гаснуть может, это не сон):
+  ```powershell
+  powercfg /change standby-timeout-ac 0
+  powercfg /change hibernate-timeout-ac 0
+  powercfg /change monitor-timeout-ac 10
+  ```
+  И «Электропитание → при закрытии крышки → Не выполнять никаких действий».
+- Если ноут всё же засыпает — `-WakeToRun` разбудит его к 11:10 (плюс в плане
+  электропитания включить «Разрешить таймеры пробуждения»).
+- **Не делать «Выход из системы» (Sign out) и выключение** — это закрывает сессию, и
+  задача не пойдёт до следующего входа (её догонит `-StartWhenAvailable` при включении).
+  Блокировка (Win+L) — норм.
+- По желанию (для удобства людей, на печать не влияет): убрать запрос пароля при
+  пробуждении — Параметры → Учётные записи → Варианты входа → «Требовать вход… →
+  Никогда», и/или настроить автологин.
 
 ## Диагностика
 - Лог: `%LOCALAPPDATA%\moisklad-print\print.log`.
